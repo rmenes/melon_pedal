@@ -37,6 +37,7 @@ A stereo guitar effects pedal built on a **Raspberry Pi 4** that runs LV2 plugin
 ## Documentation
 
 - [Hardware architecture](docs/hardware-architecture.md): circuits, GPIO map, power budget, mechanical layout
+- [Software architecture](docs/software-architecture.md): OS, JACK + mod-host, the `melon-pedald` controller, LCD and web UI
 - [Optimization backlog](docs/optimization-backlog.md): ideas parked for after the first build
 - [Shopping list](hardware/bom/shopping-list.csv)
 
@@ -44,6 +45,7 @@ A stereo guitar effects pedal built on a **Raspberry Pi 4** that runs LV2 plugin
 
 - [x] Hardware architecture (v0.4)
 - [x] Shopping list
+- [x] Software architecture (v0.1) and LCD mock-ups
 - [ ] USB boot test on the Pi 4
 - [ ] Breadboard prototypes (audio buffers, relays, MIDI, controls)
 - [ ] KiCad schematics and PCBs
