@@ -1,0 +1,45 @@
+Section,Part,Qty,Search on AliExpress,Notes
+Core,Raspberry Pi 4 Model B 8 GB,1,-,Already owned.
+Core,HiFiBerry DAC2 ADC Pro,1,Not on AliExpress: buy from hifiberry.com,Official store only; avoid clones. Check shipping to Brazil and import tax.
+Core,"USB 3 flash drive, 64 GB, low-profile (Samsung FIT Plus or SanDisk Ultra Fit)",1,Buy locally (official store),Replaces the microSD card: boot disk and file system. Use a blue USB 3 port. AliExpress USB sticks are very often fake.
+Core,"9 V 1.5 A power adapter, centre-negative, 5.5×2.1 mm",1,9V 1.5A power supply center negative 5.5x2.1 guitar pedal,Bivolt 100–240 V with Brazilian plug. 2 A is also fine.
+Controls,"2.0"" IPS TFT 240×320, ST7789, SPI",1,2.0 inch IPS TFT ST7789 240x320 SPI,Module with pins (no touch needed).
+Controls,"EC11 rotary encoder with push switch, 20 mm D shaft",6,EC11 rotary encoder switch 20mm D shaft,4 + 2 spare.
+Controls,Knobs for 6 mm D shaft,4,guitar pedal knob 6mm D shaft,About 15 mm tall.
+Controls,"Soft-touch momentary footswitch, SPST",2,soft touch momentary footswitch guitar pedal,"Momentary, normally open (not latching). 1 spare."
+Controls,"MCP23017 I/O expander, DIP-28",2,MCP23017-E/SP DIP28,1 spare.
+Controls,3 mm red LED + chrome bezel holder,5,3mm LED holder bezel chrome,
+Audio,"OPA2134PA op-amp, DIP-8",3,OPA2134PA DIP8,Fakes are common: choose a well-rated store.
+Audio,"TL072CP op-amp, DIP-8",5,TL072CP DIP8,Backup in case the OPA2134s are fake.
+Audio,DIP-8 IC sockets,10,DIP8 IC socket,
+Audio,Panasonic TQ2-5V DPDT signal relay,3,TQ2-5V relay,Alternative: Omron G5V-2-H1 5VDC. 2 + 1 spare.
+Audio,"BC337 NPN transistor, TO-92",10,BC337 transistor,
+Audio,1N4148 signal diode,20,1N4148,
+Audio,"6.35 mm stereo (TRS) jack, PCB mount with nut",3,6.35mm stereo jack socket PCB mount nut,Measure before the PCB layout. 1 spare.
+Audio,"100 nF polyester film capacitor, 63 V",10,100nF 104 polyester film capacitor 63V,
+Audio,Shielded 2-core audio cable (1 m),1,shielded audio cable 2 core thin,
+MIDI,"3.5 mm stereo jack, panel mount with nut (PJ-392 type)",3,PJ-392 3.5mm stereo jack nut,1 spare.
+MIDI,"H11L1 optocoupler, DIP-6",3,H11L1 DIP6,
+MIDI,"74HC125 buffer, DIP-14",2,74HC125 DIP14,For the prototype; the PCB may use a smaller SMD part.
+MIDI,"TRS-MIDI Type A cable/adapter, 3.5 mm to DIN-5",2,TRS MIDI Type A 3.5mm to DIN 5 pin,Must say Type A (Boss BMIDI-5-35 compatible).
+Power,"DC jack 5.5×2.1 mm, panel mount with nut (DC-022B)",2,DC-022B 5.5x2.1 panel mount,
+Power,Mini560 5 V step-down module (or MP1584EN),2,Mini560 5V step down 5A,Fixed 5 V output. 1 spare.
+Power,"1N5822 Schottky diode, 3 A",5,1N5822,Reverse-polarity protection.
+Power,P6KE15A TVS diode,5,P6KE15A,Surge protection on the 9 V input.
+Kits,"Electrolytic capacitor kit (1–470 µF, 25 V)",1,electrolytic capacitor assortment kit 1uF-470uF,Check it includes 470 µF 25 V.
+Kits,Ceramic capacitor kit (10 pF–100 nF),1,ceramic capacitor assortment kit,"Covers 100 pF, 10 nF and 100 nF."
+Kits,"Metal film resistor kit, 1/4 W 1% (10 Ω–2.2 MΩ)",1,metal film resistor kit 1/4W 1%,"Check it includes 2.2 MΩ, 33 Ω and 10 Ω."
+Prototyping,Breadboard 830 + jumper wires,1,breadboard 830 jumper wire kit,
+Prototyping,Stripboard/perfboard 7×9 cm,5,stripboard 7x9cm,
+Prototyping,Pin headers male/female 2.54 mm + jumper caps,1,2.54mm pin header male female kit jumper cap,
+Prototyping,40-pin GPIO ribbon cable (2×20 IDC),1,raspberry pi 40 pin GPIO ribbon cable,
+Prototyping,Dupont wires F-F and M-F,1,dupont jumper wire female female,
+Mechanical,Pi 4 low-profile aluminium heatsink set,1,raspberry pi 4 aluminium heatsink,
+Mechanical,30 mm 5 V fan (3010),1,3010 fan 5V,"Optional, in case the Pi runs hot."
+Mechanical,M2.5 brass standoff and screw kit,1,M2.5 brass standoff kit,
+Mechanical,M3 heat-set inserts + M3 screws,1,M3 heat set insert brass kit,For the 3D-printed enclosure.
+Mechanical,"Copper foil tape, conductive adhesive",1,copper foil tape conductive adhesive,Shielding around the input circuit.
+Mechanical,Rubber feet,1,rubber feet self adhesive,
+Mechanical,Aluminium plate 2 mm (~95 × 130 mm),1,Buy locally (metal shop),Bottom plate: heat and ground.
+Mechanical,"PETG or ASA filament, 1 kg",1,PETG filament 1kg,For the enclosure.
+Optional,Right-angle/pancake 6.35 mm TRS patch cables,2,pancake patch cable 6.35 TRS,For tight pedalboard spacing.
