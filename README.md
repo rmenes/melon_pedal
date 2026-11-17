@@ -21,7 +21,7 @@ A stereo guitar effects pedal built on a **Raspberry Pi 4** that runs LV2 plugin
 - Web interface over the Pi's Wi-Fi
 - 9 V DC centre-negative power (1.5 A adapter)
 - All jacks top-mounted for pedalboards
-- 3D-printed enclosure, about 100 × 135 × 65 mm
+- 3D-printed wedge enclosure (like the BOSS 200 series): 100 × 135 mm, 40 mm high at the front, 65 mm at the back
 
 ## Repository layout
 
@@ -30,9 +30,9 @@ A stereo guitar effects pedal built on a **Raspberry Pi 4** that runs LV2 plugin
 | `docs/` | Hardware architecture, optimization backlog, images |
 | `hardware/bom/` | Shopping list / bill of materials |
 | `hardware/kicad/` | Circuit boards: I/O board and control board (coming next) |
-| `hardware/enclosure/` | 3D-printable enclosure (later) |
+| `hardware/enclosure/` | 3D-printable enclosures, one sub-folder per design variant (see its README) |
 | `software/` | LV2 host setup, web UI, LCD/encoder/MIDI service (later) |
-| `tools/` | Helper scripts, e.g. the concept render |
+| `tools/` | Helper scripts: concept renders (enclosure generators live in each `hardware/enclosure/<variant>/` folder) |
 
 ## Documentation
 
@@ -41,6 +41,7 @@ A stereo guitar effects pedal built on a **Raspberry Pi 4** that runs LV2 plugin
 - [Decision log](docs/decisions.md): every decision so far and why
 - [Optimization backlog](docs/optimization-backlog.md): ideas parked for after the first build
 - [Shopping list](hardware/bom/shopping-list.csv)
+- [Enclosures](hardware/enclosure/README.md): design variants (HiFiBerry wedge, USB audio interface)
 
 ## Status
 
@@ -50,8 +51,16 @@ A stereo guitar effects pedal built on a **Raspberry Pi 4** that runs LV2 plugin
 - [ ] USB boot test on the Pi 4
 - [ ] Breadboard prototypes (audio buffers, relays, MIDI, controls)
 - [ ] KiCad schematics and PCBs
-- [ ] Enclosure CAD
+- [x] Enclosure v0.2: wedge, tray + sloped lid (fit-check print, parametric)
+- [ ] Enclosure final (after measuring the real parts)
 - [ ] Software
+
+## Regenerating the enclosure STLs
+
+```
+python3 hardware/enclosure/hifiberry-wedge/make_enclosure.py --preview
+```
+Needs `numpy`, `scipy` and `matplotlib`. See [hardware/enclosure/hifiberry-wedge/README.md](hardware/enclosure/hifiberry-wedge/README.md).
 
 ## Regenerating the renders
 

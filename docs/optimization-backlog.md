@@ -17,6 +17,10 @@ Watch-out: less internal air, so verify Pi temperature under full plugin load (v
 
 ![Height comparison](images/height-comparison.png)
 
+### Even lower: 40 mm body (checked 2026-11-17, not planned)
+Possible only on paper, with ~1–2 mm margin: 2 mm aluminium plate, 3 mm Pi standoffs, HiFiBerry RCA + 3.5 mm jacks desoldered, a flat control board (~10.5 mm below the top). The LCD and knobs 1/3 sit over the HAT, knob 2 ~4 mm above the Pi USB stack. No room for the 30 mm fan; cooling relies on the aluminium plate. Comfortable 40 mm needs a lower stack (CM4/CM5 carrier or a combined custom HAT).
+Enclosure: change `H_TOTAL`, `PLATE_T`, `PI_STANDOFF` in `hardware/enclosure/hifiberry-wedge/make_enclosure.py` (v0.2 wedge: `H_FRONT`, `H_BACK`, `PI_STANDOFF`) and check the cross-sections.
+
 ### Other possible later optimizations
 - Width: a smaller compute board (CM4/CM5 or Pi Zero 2 W) could reach true Boss width (~73 mm).
 - Combined custom HAT (codec + front-end + MIDI) to remove the HiFiBerry entirely.

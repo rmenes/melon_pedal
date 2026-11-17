@@ -1,4 +1,4 @@
-"""Polished concept render of the Melon Pedal.
+"""Polished concept render of the Melon Pedal (wedge enclosure v0.2).
 
 A small signed-distance-field ray marcher in NumPy: soft shadows, ambient
 occlusion, metal reflections, printed panel graphics and a lit LCD.
@@ -18,8 +18,10 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 F = np.float32
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT_DIR = os.path.join(HERE, "..", "docs", "images")
+OUT_DIR = os.environ.get("RENDER_OUT", os.path.join(HERE, "..", "docs", "images"))
 FONT_DIR = "/usr/share/fonts/opentype/inter/"
+CREAM = (0xF4, 0xFB, 0xE9)        # brand cream
+LABEL = (0x7F, 0xD6, 0x8A)        # brand light green
 
 
 def font(style, size):
@@ -31,25 +33,54 @@ def font(style, size):
 
 
 # ---------------------------------------------------------------- geometry
-W, L, H = 100.0, 135.0, 65.0      # enclosure
+W, L = 100.0, 135.0               # enclosure footprint
+H_FRONT, H_BACK = 40.0, 65.0      # wedge: height at the front and back edge
+H = H_BACK
 FEET = 3.0                        # rubber feet height
 Z0 = FEET                         # enclosure bottom
-ZT = FEET + H                     # enclosure top surface
+ZB = Z0 + H_BACK                  # top of the back edge
 HW, HL = W / 2, L / 2
+SLOPE = (H_BACK - H_FRONT) / L
+CA, SA = float(np.cos(np.arctan(SLOPE))), float(np.sin(np.arctan(SLOPE)))
+LID_T = 3.0                       # the lid is a separate part: seam 3 mm below the top
 
-KNOBS = [(-30.0, -5.0), (30.0, -5.0), (-30.0, 38.0), (30.0, 38.0)]
-FOOT_XY = (0.0, -44.0)
-LED_XY = (0.0, -24.0)
-LCD_C = (0.0, 16.5)               # LCD window centre (x, y)
-LCD_HALF = (21.0, 16.0)           # bezel window half size
-GLASS_HALF = (18.5, 13.5)         # active screen half size
+# Lid features live in a "flat" frame: the world rotated about the x axis so
+# the sloped top becomes the plane z = ZT. Positions there are (x, y / cos).
+ZT = Z0 + (H_FRONT + H_BACK) / 2  # top height at y = 0 (pivot of the rotation)
+HLF = HL / CA                     # half length of the top, measured along the slope
+
+
+def flat(xy):
+    return (xy[0], xy[1] / CA)
+
+
+def to_flat(p):
+    q = p.copy()
+    dz = p[:, 2] - ZT
+    q[:, 1] = p[:, 1] * CA + dz * SA
+    q[:, 2] = -p[:, 1] * SA + dz * CA + ZT
+    return q
+
+
+KNOBS = [flat(k) for k in [(-30.0, -5.0), (30.0, -5.0), (-30.0, 38.0), (30.0, 38.0)]]
+FOOT_XY = flat((0.0, -44.0))
+LED_XY = flat((0.0, -24.0))
+LCD_C = flat((0.0, 16.5))         # LCD window centre (flat frame)
+LCD_HALF = (23.0, 18.0)           # bezel recess half size
+WIN_HALF = (21.0, 16.0)           # window half size
+GLASS_HALF = (20.4, 15.3)         # active screen half size
 JZ = Z0 + 17.0                    # jack centre height
 JACKS = [  # x, kind
     (-36.0, "big"), (-16.0, "dc"), (1.0, "mini"), (16.0, "mini"), (36.0, "big")]
-USB_C = (HW, 12.0, Z0 + 21.0)     # USB pocket centre on right wall
+USB_C = (HW, -8.0, Z0 + 18.2)     # USB cut-out centre on the right wall (both USB stacks)
+USB_HALF = (3.0, 17.5, 10.2)
+USB_STICK = (HW - 1.7, 1.0, Z0 + 14.4)   # boot drive in the lower blue USB 3 port
+VENT_YS = [-20.0 + 5.0 * i for i in range(9)]
 
 # material ids
 M_GROUND, M_BODY, M_METAL, M_KNOB, M_GLASS, M_LED, M_HOLE, M_RUBBER, M_USB, M_BEZEL = range(10)
+# material of each entry in scene(): ground, body, metal, knob, glass, led, holes, feet, usb, port shadow
+MATS = [M_GROUND, M_BODY, M_METAL, M_KNOB, M_GLASS, M_LED, M_HOLE, M_RUBBER, M_USB, M_HOLE]
 
 
 def length2(a, b):
@@ -92,32 +123,41 @@ def sd_hex(p, c, axis, r, h):
     return np.minimum(np.maximum(dx, dy), 0) + length2(np.maximum(dx, 0), np.maximum(dy, 0))
 
 
-def body_sdf(p):
-    d = sd_round_box(p, (0, 0, Z0 + H / 2), (HW, HL, H / 2), 5.0)
-    # LCD window recess
-    rec = sd_round_box(p, (LCD_C[0], LCD_C[1], ZT), (LCD_HALF[0], LCD_HALF[1], 1.6), 1.2)
-    d = np.maximum(d, -rec)
-    # vents on the left wall
-    for i in range(6):
-        z = Z0 + 14 + i * 6.0
-        slot = sd_round_box(p, (-HW, -18.0, z), (2.0, 22.0, 1.1), 1.0)
+def round_intersect(a, b, r):
+    ua, ub = np.maximum(r + a, 0), np.maximum(r + b, 0)
+    return np.minimum(-r, np.maximum(a, b)) + np.sqrt(ua * ua + ub * ub)
+
+
+def body_sdf(p, pf):
+    box = sd_round_box(p, (0, 0, Z0 + (H + 10) / 2), (HW, HL, (H + 10) / 2), 5.0)   # taller: the slope cuts the top
+    d = round_intersect(box, pf[:, 2] - ZT, 1.5)          # sloped top, softly rounded edge
+    # LCD bezel recess + window
+    rec = sd_round_box(pf, (LCD_C[0], LCD_C[1], ZT), (LCD_HALF[0], LCD_HALF[1], 1.0), 1.5)
+    win = sd_round_box(pf, (LCD_C[0], LCD_C[1], ZT), (WIN_HALF[0], WIN_HALF[1], 3.0), 0.8)
+    d = np.maximum(d, -np.minimum(rec, win))
+    # vertical vent slots on the left wall
+    for y in VENT_YS:
+        slot = sd_round_box(p, (-HW, y, Z0 + 25.0), (2.0, 1.3, 11.0), 1.2)
         d = np.maximum(d, -slot)
-    # USB pocket on the right wall
-    pocket = sd_round_box(p, USB_C, (3.0, 10.0, 6.5), 2.0)
+    # USB cut-out on the right wall
+    pocket = sd_round_box(p, USB_C, USB_HALF, 2.0)
     d = np.maximum(d, -pocket)
     return d
 
 
 def scene(p, want_mat=False):
     ds = []
+    pf = to_flat(p)
     ds.append(p[:, 2])                                    # ground
-    ds.append(body_sdf(p))                                # body
+    ds.append(body_sdf(p, pf))                            # body
+    p_world, p = p, pf                                    # lid parts below use the flat frame
     # metal: washers, footswitch, LED bezel, jack nuts + bushings, USB metal
     metal = sd_hex(p, (FOOT_XY[0], FOOT_XY[1], ZT), 2, 8.5, 3.0)
     metal = np.minimum(metal, sd_cyl(p, (FOOT_XY[0], FOOT_XY[1], ZT + 2.5), 2, 6.0, 9.5, 2.2))
     metal = np.minimum(metal, sd_cyl(p, (LED_XY[0], LED_XY[1], ZT), 2, 3.4, 2.2, 0.6))
     for kx, ky in KNOBS:
         metal = np.minimum(metal, sd_cyl(p, (kx, ky, ZT), 2, 8.5, 1.2, 0.4))
+    p = p_world
     hole = None
     for x, kind in JACKS:
         nut_r, bush_r, hole_r = {"big": (7.0, 4.8, 3.2), "dc": (6.0, 4.0, 2.9), "mini": (4.2, 3.0, 1.7)}[kind]
@@ -127,6 +167,7 @@ def scene(p, want_mat=False):
         hole = hd if hole is None else np.minimum(hole, hd)
     metal = np.maximum(metal, -hole)
     ds.append(metal)
+    p = pf
     # knobs (black, knurled skirt)
     knob = None
     for kx, ky in KNOBS:
@@ -136,11 +177,12 @@ def scene(p, want_mat=False):
         kd = sd_cyl(p, (kx, ky, ZT + 1.2), 2, 7.6, 14.0, 1.6) + knurl
         knob = kd if knob is None else np.minimum(knob, kd)
     ds.append(knob)
-    # LCD glass
-    ds.append(sd_round_box(p, (LCD_C[0], LCD_C[1], ZT - 1.4), (GLASS_HALF[0], GLASS_HALF[1], 0.5), 0.6))
+    # LCD glass (under the window, behind the 3 mm lid)
+    ds.append(sd_round_box(p, (LCD_C[0], LCD_C[1], ZT - 3.3), (WIN_HALF[0] + 1.0, WIN_HALF[1] + 1.0, 0.3), 0.4))
     # LED dome
     led = np.sqrt((p[:, 0] - LED_XY[0]) ** 2 + (p[:, 1] - LED_XY[1]) ** 2 + (p[:, 2] - (ZT + 2.0)) ** 2) - 2.0
     ds.append(led)
+    p = p_world
     # jack holes: dark material, placed as a thin disc deep in the hole
     hb = None
     for x, kind in JACKS:
@@ -155,18 +197,15 @@ def scene(p, want_mat=False):
             fd = sd_cyl(p, (fx, fy, 0.0), 2, 6.0, FEET + 0.5, 1.0)
             feet = fd if feet is None else np.minimum(feet, fd)
     ds.append(feet)
-    # USB stick in the pocket
-    usb = sd_round_box(p, (USB_C[0] + 0.5, USB_C[1], USB_C[2]), (3.2, 8.0, 3.6), 1.2)
+    # USB boot drive in the cut-out
+    usb = sd_round_box(p, USB_STICK, (4.4, 7.9, 3.6), 1.2)
     ds.append(usb)
-    # LCD bezel frame (black, slightly raised inside the recess)
-    frame = sd_round_box(p, (LCD_C[0], LCD_C[1], ZT - 1.25), (LCD_HALF[0] - 0.4, LCD_HALF[1] - 0.4, 0.35), 1.0)
-    win = sd_round_box(p, (LCD_C[0], LCD_C[1], ZT - 1.25), (GLASS_HALF[0] + 0.2, GLASS_HALF[1] + 0.2, 2.0), 0.6)
-    frame = np.maximum(frame, -win)
-    ds.append(frame)
+    # dark inside of the USB cut-out (the Pi's ports)
+    ds.append(sd_round_box(p, (HW - 3.2, USB_C[1], USB_C[2]), (0.4, USB_HALF[1] - 0.3, USB_HALF[2] - 0.3), 0.3))
     D = np.stack(ds, axis=1)
     d = D.min(axis=1)
     if want_mat:
-        return d, D.argmin(axis=1)
+        return d, np.array(MATS)[D.argmin(axis=1)]
     return d
 
 
@@ -175,21 +214,21 @@ TEX_PX = 12  # pixels per mm for panel graphics
 
 
 def make_top_texture():
-    w, h = int(W * TEX_PX), int(L * TEX_PX)
+    w, h = int(W * TEX_PX), int(2 * HLF * TEX_PX)
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     dr = ImageDraw.Draw(img)
 
-    def xy(x, y):  # mm (scene coords) -> px; image top = back edge
-        return (x + HW) * TEX_PX, (HL - y) * TEX_PX
+    def xy(x, y):  # mm (flat frame) -> px; image top = back edge
+        return (x + HW) * TEX_PX, (HLF - y) * TEX_PX
 
-    cream = (240, 232, 205, 255)
+    cream = CREAM + (255,)
     # brand at the front strip
     f_big = font("Bold", int(7.0 * TEX_PX))
     f_small = font("Medium", int(2.6 * TEX_PX))
-    cx, cy = xy(0, -59.5)
+    cx, cy = xy(0, -58.0 / CA)
     dr.text((cx, cy), "MELON", font=f_big, fill=cream, anchor="mm")
-    cx, cy = xy(0, -65.0)
-    dr.text((cx, cy), "S T E R E O   ·   L V 2   ·   M I D I", font=f_small, fill=(240, 232, 205, 200), anchor="mm")
+    cx, cy = xy(0, -63.4 / CA)
+    dr.text((cx, cy), "S T E R E O   ·   L V 2   ·   M I D I", font=f_small, fill=CREAM + (200,), anchor="mm")
     # knob numbers + tick arcs
     f_num = font("SemiBold", int(3.2 * TEX_PX))
     for i, (kx, ky) in enumerate(KNOBS):
@@ -198,16 +237,16 @@ def make_top_texture():
         for a in np.linspace(np.radians(-225), np.radians(45), 11):
             x0, y0 = cx + r * np.cos(a), cy + r * np.sin(a)
             x1, y1 = cx + (r + 1.6 * TEX_PX) * np.cos(a), cy + (r + 1.6 * TEX_PX) * np.sin(a)
-            dr.line((x0, y0, x1, y1), fill=(240, 232, 205, 170), width=int(0.45 * TEX_PX))
-        tx, ty = xy(kx, ky - 14.5)
+            dr.line((x0, y0, x1, y1), fill=CREAM + (170,), width=int(0.45 * TEX_PX))
+        tx, ty = xy(kx, ky - 14.5 / CA)
         dr.text((tx, ty), str(i + 1), font=f_num, fill=cream, anchor="mm")
     # footswitch ring
     cx, cy = xy(*FOOT_XY)
-    r = 12.0 * TEX_PX
-    dr.ellipse((cx - r, cy - r, cx + r, cy + r), outline=(240, 232, 205, 120), width=int(0.4 * TEX_PX))
+    r = 10.8 * TEX_PX
+    dr.ellipse((cx - r, cy - r, cx + r, cy + r), outline=CREAM + (120,), width=int(0.4 * TEX_PX))
     # pinstripe border
-    m = 3.5 * TEX_PX
-    dr.rounded_rectangle((m, m, w - m, h - m), radius=int(3 * TEX_PX), outline=(240, 232, 205, 90), width=int(0.35 * TEX_PX))
+    m = 2.4 * TEX_PX
+    dr.rounded_rectangle((m, m, w - m, h - m), radius=int(3 * TEX_PX), outline=CREAM + (90,), width=int(0.35 * TEX_PX))
     return np.asarray(img.filter(ImageFilter.GaussianBlur(0.6))).astype(F) / 255
 
 
@@ -215,15 +254,14 @@ def make_back_texture():
     w, h = int(W * TEX_PX), int(H * TEX_PX)
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     dr = ImageDraw.Draw(img)
-    f = font("SemiBold", int(2.9 * TEX_PX))
-    labels = {-36.0: "OUT", -16.0: "9V DC", 1.0: "MIDI OUT", 16.0: "MIDI IN", 36.0: "IN"}
+    f = font("SemiBold", int(3.6 * TEX_PX))
+    labels = {-36.0: "OUT", -16.0: "9V", 1.0: "OUT", 16.0: "IN", 36.0: "IN"}   # same as the STL engraving
     for x, kind in JACKS:
         # back face seen from behind: player's left (-x) appears on the right
         px = (HW - x) * TEX_PX
-        py = (ZT - (JZ + 12.0)) * TEX_PX
-        dr.text((px, py), labels[x], font=f, fill=(240, 232, 205, 235), anchor="mm")
-    dr.text(((HW - (-16.0)) * TEX_PX, (ZT - (JZ - 10.5)) * TEX_PX), "⊖-◐-⊕", font=font("Regular", int(2.2 * TEX_PX)),
-            fill=(240, 232, 205, 160), anchor="mm")
+        py = (ZB - (Z0 + 29.0)) * TEX_PX
+        dr.text((px, py), labels[x], font=f, fill=LABEL + (235,), anchor="mm")
+    dr.text(((HW - 8.5) * TEX_PX, (ZB - (Z0 + 35.0)) * TEX_PX), "MIDI", font=f, fill=LABEL + (235,), anchor="mm")
     return np.asarray(img.filter(ImageFilter.GaussianBlur(0.6))).astype(F) / 255
 
 
@@ -234,8 +272,8 @@ def make_side_texture():
     f = font("SemiBold", int(2.6 * TEX_PX))
     # right wall seen from +x: front (-y) on the left
     px = (USB_C[1] + HL) * TEX_PX
-    py = (ZT - (USB_C[2] + 10.0)) * TEX_PX
-    dr.text((px, py), "USB · BOOT", font=f, fill=(240, 232, 205, 220), anchor="mm")
+    py = (ZB - (USB_C[2] + USB_HALF[2] + 4.0)) * TEX_PX
+    dr.text((px, py), "USB · BOOT", font=f, fill=LABEL + (220,), anchor="mm")
     return np.asarray(img.filter(ImageFilter.GaussianBlur(0.6))).astype(F) / 255
 
 
@@ -243,7 +281,7 @@ def make_screen_texture():
     w, h = 480, 350
     img = Image.new("RGB", (w, h), (8, 12, 18))
     dr = ImageDraw.Draw(img)
-    accent = (120, 220, 140)
+    accent = (0x7F, 0xD6, 0x8A)   # brand light green
     dr.rectangle((0, 0, w, 52), fill=(22, 34, 44))
     dr.text((18, 26), "P01", font=font("Bold", 30), fill=accent, anchor="lm")
     dr.text((w - 18, 26), "48 kHz  ·  3.2 ms", font=font("Medium", 22), fill=(150, 170, 185), anchor="rm")
@@ -275,7 +313,7 @@ def sample(tex, u, v):
 
 # ---------------------------------------------------------------- rendering
 BB_MIN = np.array([-HW - 6, -HL - 6, 0.0], F)
-BB_MAX = np.array([HW + 6, HL + 10, ZT + 20], F)
+BB_MAX = np.array([HW + 6, HL + 10, ZB + 20], F)
 
 
 def ray_box(ro, rd):
@@ -402,34 +440,35 @@ def shade(ro, rd, t, hit):
     spec_k[g] = 0.05
 
     b = mat == M_BODY
-    body_col = np.array([0.020, 0.070, 0.040], F)   # deep melon-rind green
+    body_col = (np.array([0x1E, 0x3A, 0x2B], F) / 255) ** 2.2 * 0.85   # brand deep green #1E3A2B
     base[b] = body_col
     spec_k[b] = 0.35
     gloss[b] = 60
     refl[b] = 0.06
     # printed graphics on faces
     pb = p[b]
+    pbf = to_flat(pb)
     nb = nrm[b]
     gfx = np.zeros((pb.shape[0], 4), F)
     top = nb[:, 2] > 0.7
     if top.any():
-        u = (pb[top, 0] + HW) / W
-        vv = (HL - pb[top, 1]) / L
+        u = (pbf[top, 0] + HW) / W
+        vv = (HLF - pbf[top, 1]) / (2 * HLF)
         gfx[top] = sample(TOP_TEX, u, vv)
     back = nb[:, 1] > 0.7
     if back.any():
         u = (HW - pb[back, 0]) / W
-        vv = (ZT - pb[back, 2]) / H
+        vv = (ZB - pb[back, 2]) / H
         gfx[back] = sample(BACK_TEX, u, vv)
     side = nb[:, 0] > 0.7
     if side.any():
         u = (pb[side, 1] + HL) / L
-        vv = (ZT - pb[side, 2]) / H
+        vv = (ZB - pb[side, 2]) / H
         gfx[side] = sample(SIDE_TEX, u, vv)
     a = gfx[:, 3:4]
     base[b] = base[b] * (1 - a) + gfx[:, :3] ** 2.2 * a
-    # lighter top lid line (seam) 4 mm below the top
-    seam = np.abs(pb[:, 2] - (ZT - 4.0)) < 0.25
+    # lid seam: the lid is a separate part, 3 mm thick
+    seam = (np.abs(pbf[:, 2] - (ZT - LID_T)) < 0.22) & (nb[:, 2] < 0.7)
     base[np.where(b)[0][seam]] *= 0.35
 
     m = mat == M_METAL
@@ -439,7 +478,7 @@ def shade(ro, rd, t, hit):
     refl[m] = 0.75
 
     k = mat == M_KNOB
-    pk = p[k]
+    pk = to_flat(p[k])
     base[k] = np.array([0.025, 0.025, 0.028], F)
     spec_k[k] = 0.45
     gloss[k] = 40
@@ -464,11 +503,12 @@ def shade(ro, rd, t, hit):
     base[ki[ptr]] = (0.85, 0.83, 0.78)
 
     gl = mat == M_GLASS
-    pg = p[gl]
+    pg = to_flat(p[gl])
     u = (pg[:, 0] - (LCD_C[0] - GLASS_HALF[0])) / (2 * GLASS_HALF[0])
     vv = ((LCD_C[1] + GLASS_HALF[1]) - pg[:, 1]) / (2 * GLASS_HALF[1])
     scr = sample(SCREEN_TEX, np.clip(u, 0, 1), np.clip(vv, 0, 1)) ** 2.2
-    emis[gl] = scr * 2.2
+    on = ((u > 0) & (u < 1) & (vv > 0) & (vv < 1))[:, None]   # black border around the active area
+    emis[gl] = scr * 2.2 * on
     base[gl] = 0.01
     spec_k[gl] = 1.0
     gloss[gl] = 300

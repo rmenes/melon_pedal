@@ -25,7 +25,7 @@ Raspberry Pi 4 Model B (8 GB) running Raspberry Pi OS, hosting Melon Plugins (LV
 | GPIO expander | MCP23017 (I2C) for encoder push switches + spares |
 | Storage / boot | **64 GB low-profile USB 3 flash drive** (Samsung FIT Plus or SanDisk Ultra Fit) in a blue USB 3 port. The Pi 4's micro-SD slot is broken and unused |
 | Power | 9 V DC centre-negative, 9 V / 1.5 A supply sufficient (worst case ≈ 1.1 A incl. USB drive) |
-| Enclosure | 3D-printed, **~100 W × 135 L × 65 H mm**, aluminium bottom plate, side cut-out for USB |
+| Enclosure | 3D-printed **wedge**, 100 W × 135 L mm, **40 mm high at the front → 65 mm at the back** (BOSS 200-series style): tray + sloped lid, side cut-out for USB. See [enclosure](../hardware/enclosure/hifiberry-wedge/README.md) |
 
 ---
 
@@ -221,6 +221,7 @@ External width 100 mm; jack centres measured from the **left** edge:
 - **Front zone (~35 mm):** footswitch (body ~25 mm deep) kept clear of the Pi stack.
 - **Lid:** control board (encoders, MCP23017, LCD, LED), flat cable to the Pi header area.
 - **Height check:** Pi + HAT stack ≈ 40 mm from floor; control board + encoders hang ≈ 15 mm below lid; internal height ≈ 60 mm → OK.
+- **Wedge (2026-11-17):** the lid slopes from 40 mm (front) to 65 mm (back). Tightest spot: encoder 2 over the HiFiBerry's own RCA/3.5 mm jacks (if they sit at the USB end): ~0 mm with a 13 mm deep control board. Keep the control board flat there or remove those unused jacks. Run `hardware/enclosure/hifiberry-wedge/make_enclosure.py` for the current clearance report.
 - Aluminium bottom plate, low-profile Pi heatsink, side/bottom vents, provision for a 30 mm fan.
 
 ---
