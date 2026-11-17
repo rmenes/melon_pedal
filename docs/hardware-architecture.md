@@ -6,7 +6,7 @@ Raspberry Pi 4 Model B (8 GB) running Raspberry Pi OS, hosting Melon Plugins (LV
 **v0.3:** all connectors **top-mounted** (back edge) for pedalboard use: IN, OUT, MIDI IN, MIDI OUT, DC · new **I/O board** carrying all jacks + analog + MIDI + power · Pi rotated 90° · enclosure ~100 W × 135 L × 65 H mm.
 **v0.2:** stereo TRS in/out · 3.5 mm TRS MIDI (Type A) · encoders · 9 V / 1.5 A supply checked.
 
-![Concept render](images/concept-render.png)
+![Render](images/render-hero.png)
 
 ---
 

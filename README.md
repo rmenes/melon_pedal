@@ -2,7 +2,11 @@
 
 A stereo guitar effects pedal built on a **Raspberry Pi 4** that runs LV2 plugins, in particular the [Melon Plugins](https://github.com/rmenes/melon_plugins).
 
-![Concept render](docs/images/concept-render.png)
+![Melon Pedal render](docs/images/render-hero.png)
+
+| Top | Back (top-mounted jacks) |
+|---|---|
+| ![Top view](docs/images/render-top.png) | ![Back view](docs/images/render-back.png) |
 
 ## Features (planned)
 
@@ -46,9 +50,10 @@ A stereo guitar effects pedal built on a **Raspberry Pi 4** that runs LV2 plugin
 - [ ] Enclosure CAD
 - [ ] Software
 
-## Regenerating the concept render
+## Regenerating the renders
 
 ```
-python3 tools/render_pedal.py
+python3 tools/render_pretty.py            # 1600x1000, 2x supersampling, ~2 min per view
+python3 tools/render_pretty.py --res 800x500 --ss 1   # quick preview
 ```
-Requires `matplotlib` and `numpy`. Output goes to `docs/images/`.
+A small NumPy ray marcher (soft shadows, reflections, printed panel graphics, lit LCD); needs only `numpy` and `Pillow`. Output goes to `docs/images/`. The older `tools/render_pedal.py` (matplotlib) is kept for quick layout checks.
