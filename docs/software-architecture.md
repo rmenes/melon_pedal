@@ -1,4 +1,6 @@
-# Melon Pedal — Software Architecture (v0.1)
+# Melon Pedal — Software Architecture (v0.2)
+
+**v0.2 (2026-11-17):** controller in Python confirmed · Melon Plugins stay on **JUCE**; added the JUCE-on-ARM plan (§7) and support for LV2 *parameters* (JUCE style) next to control ports.
 
 Goal for the first version: **one LV2 plugin loaded at a time**, controlled from the pedal (4 encoders, footswitch, 2" LCD), from MIDI, and from a web page over Wi-Fi. Runs on **Raspberry Pi OS Lite (64-bit)** on the Raspberry Pi 4.
 
@@ -95,8 +97,8 @@ Python 3.13 (Trixie's version), `asyncio`, one process. Modules:
 
 | Module | Job | Libraries |
 |---|---|---|
-| `engine` | mod-host client: load/remove plugin, set params, bypass, JACK connections, read feedback (meters/outputs) | `asyncio` sockets |
-| `catalog` | Scan installed LV2 bundles, read control ports (symbol, name, min/max/default, unit, toggled, integer, enumeration, logarithmic) → JSON cache | `python3-lilv` |
+| `engine` | mod-host client: load/remove plugin, set params (`param_set` for control ports, `patch_set` for LV2 parameters), bypass, JACK connections, read feedback (meters/outputs) | `asyncio` sockets |
+| `catalog` | Scan installed LV2 bundles and read both kinds of controls: **control ports** and **LV2 parameters** (`lv2:Parameter` / `patch:writable`, which JUCE uses), with symbol/URI, name, min/max/default, unit, toggled, integer, enumeration, logarithmic → JSON cache | `python3-lilv` |
 | `profiles` | Optional per-plugin "pedal profile": which parameters go on which page/knob, short labels, display style. Without one, profiles are generated automatically (4 params per page, in port order) | JSON files |
 | `presets` | Preset = plugin URI + parameter values + profile + name. Banks of presets. Program Change → preset | JSON in `/data/presets` |
 | `controls` | Encoders (kernel `rotary-encoder` overlay → evdev, with acceleration), encoder switches (MCP23017 on I2C, INT pin), footswitch (short/long press), relays + LED | `python-evdev`, `smbus2`, `gpiod` |
@@ -153,12 +155,25 @@ on_feedback(callback)          # output ports: meters, tuner, etc.
 
 ---
 
-## 7. Plugins
-- Melon Plugins need **aarch64 Linux LV2 builds**. Options: build on the Pi itself, or cross-compile in GitHub Actions (arm64 runner) and publish release zips.
-- Installed to `/data/lv2` (added to `LV2_PATH`), so they survive OS updates and can be uploaded from the web UI.
-- Only the DSP and the `.ttl` metadata are used. Pedal profiles for Melon Plugins live in this repo under `software/profiles/`.
+## 7. Plugins (JUCE on ARM)
 
----
+Melon Plugins keep using **JUCE**: one codebase gives VST3 on Windows and LV2 on the pedal.
+
+### 7.1 What ARM changes
+| Topic | Impact | What we do |
+|---|---|---|
+| DSP speed | Low. The Cortex-A72 handles typical guitar DSP easily; JUCE's `dsp` module has NEON support | Build with `-O3 -mcpu=cortex-a72`, `float` DSP, `juce::ScopedNoDenormals` in `processBlock` |
+| How parameters are exposed | **The main one.** JUCE's LV2 wrapper publishes parameters as LV2 *parameters* (`lv2:Parameter`, set by patch messages), not as classic control ports. Some hosts only handle control ports | mod-host supports `patch_set`/`patch_get`; `melon-pedald` reads both kinds. Verify early (milestone S2) |
+| Binary size, load time, memory | JUCE plugins are larger and slower to load than plain LV2 | Hidden by the relay bypass during plugin swaps |
+| Idle CPU | The plugin's editor (GUI) is never opened, but timers or background threads in the processor still cost CPU | Keep `AudioProcessor` free of timers/GUI work |
+| Building | JUCE runs a helper program during the build to write the `.ttl` files, so cross-compiling from x86 is awkward | Build natively on arm64: on the Pi, or (faster) on GitHub Actions arm64 runners |
+
+### 7.2 Build and install
+- `melon_plugins` gets a CMake target for LV2 (`FORMATS VST3 LV2`) and a GitHub Actions job on an arm64 Linux runner that publishes `*.lv2.zip` release files.
+- Needed packages on the build machine: JUCE's Linux dependencies (ALSA, FreeType, fontconfig, X11/Xext/Xrandr/Xcursor headers, curl, webkit optional/off).
+- Bundles install to `/data/lv2` (added to `LV2_PATH`) or are uploaded from the web UI.
+- Only the DSP and `.ttl` metadata are used on the pedal. Pedal profiles for Melon Plugins live in this repo under `software/profiles/`.
+- Fallback if a JUCE parameter problem can't be solved: a thin pedal-only LV2 build of the same DSP code (plain LV2 or DPF wrapper) with classic control ports.
 
 ## 8. System setup
 - Raspberry Pi OS Lite 64-bit on the USB drive. Hostname `melon`, SSH on.
@@ -179,7 +194,7 @@ software/
 
 ## 10. Milestones
 1. **S1 – Audio up:** Pi OS Lite on USB, HiFiBerry working, JACK at 128 frames, mod-host built; load a test plugin from the command line; measure latency and xruns.
-2. **S2 – Melon Plugins on the Pi:** aarch64 LV2 build of Melon GraphicEQ; load it in mod-host.
+2. **S2 – Melon Plugins on the Pi:** aarch64 LV2 build of Melon GraphicEQ (JUCE); load it in mod-host and confirm `patch_set` changes its parameters; measure load time and CPU.
 3. **S3 – Controller core:** `melon-pedald` with engine, catalog, presets and a minimal web UI (pick plugin, move sliders).
 4. **S4 – Pedal hardware UI:** LCD screens, encoders, footswitch, relays (on the breadboard prototype).
 5. **S5 – MIDI + polish:** CC/PC/learn, glitch-free swap, pedal profiles.
