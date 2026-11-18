@@ -2,7 +2,7 @@
 
 Raspberry Pi 4 Model B (8 GB) running Raspberry Pi OS, hosting Melon Plugins (LV2).
 
-**v0.4 changes (2026-11-17):** the Pi's micro-SD slot is broken → **boot + file system on a low-profile USB 3 flash drive (64 GB)** · USB ports now reached through a **required side-wall cut-out** · power budget updated.
+**v0.4 changes (2026-11-17):** the Pi's micro-SD slot is broken → **boot + file system on a low-profile USB 3 flash drive (128 GB, bought)** · USB ports now reached through a **required side-wall cut-out** · power budget updated.
 **v0.3:** all connectors **top-mounted** (back edge) for pedalboard use: IN, OUT, MIDI IN, MIDI OUT, DC · new **I/O board** carrying all jacks + analog + MIDI + power · Pi rotated 90° · enclosure ~100 W × 135 L × 65 H mm.
 **v0.2:** stereo TRS in/out · 3.5 mm TRS MIDI (Type A) · encoders · 9 V / 1.5 A supply checked.
 
@@ -23,7 +23,7 @@ Raspberry Pi 4 Model B (8 GB) running Raspberry Pi OS, hosting Melon Plugins (LV
 | Knobs | 4 × EC11 rotary encoders with push switch |
 | Display | 2.0" SPI TFT 240×320 ST7789 |
 | GPIO expander | MCP23017 (I2C) for encoder push switches + spares |
-| Storage / boot | **64 GB low-profile USB 3 flash drive** (Samsung FIT Plus or SanDisk Ultra Fit) in a blue USB 3 port. The Pi 4's micro-SD slot is broken and unused |
+| Storage / boot | **128 GB low-profile USB 3 flash drive** (bought; room for growth) (Samsung FIT Plus or SanDisk Ultra Fit) in a blue USB 3 port. The Pi 4's micro-SD slot is broken and unused |
 | Power | 9 V DC centre-negative, 9 V / 1.5 A supply sufficient (worst case ≈ 1.1 A incl. USB drive) |
 | Enclosure | 3D-printed **wedge**, 100 W × 135 L mm, **40 mm high at the front → 65 mm at the back** (BOSS 200-series style): tray + sloped lid, side cut-out for USB. See [enclosure](../hardware/enclosure/hifiberry-wedge/README.md) |
 
@@ -233,7 +233,7 @@ Full shopping list with AliExpress search terms and spares: [hardware/bom/shoppi
 | Qty | Part | Notes |
 |---|---|---|
 | 1 | Raspberry Pi 4 B 8 GB | micro-SD slot broken |
-| 1 | 64 GB low-profile USB 3 flash drive (Samsung FIT Plus / SanDisk Ultra Fit) | boot + file system; buy from an official store |
+| 1 | 128 GB low-profile USB 3 flash drive (Samsung FIT Plus / SanDisk Ultra Fit) | boot + file system; bought |
 | 1 | HiFiBerry DAC2 ADC Pro | |
 | 1 | 2.0" ST7789 SPI TFT 240×320 | |
 | 4 | EC11 encoders with switch + knobs | |
