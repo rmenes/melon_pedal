@@ -1,0 +1,22 @@
+[Unit]
+Description=Melon Pedal: controller (NexFoot, presets)
+After=melon-modhost.service melon-display.service
+BindsTo=melon-modhost.service
+PartOf=melon-pedal.target
+StartLimitIntervalSec=0
+
+[Service]
+User=__USER__
+SupplementaryGroups=audio
+EnvironmentFile=/etc/default/melon-pedal
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=__PEDALD_DIR__
+ExecStartPre=/bin/sleep 1
+ExecStart=/usr/bin/python3 -m melon_pedald --port ${MODHOST_PORT} $PEDALD_ARGS
+CPUAffinity=0 1
+# also covers "NexFoot not plugged in": it retries every 3 s until it is
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=melon-pedal.target

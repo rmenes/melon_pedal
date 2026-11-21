@@ -1,0 +1,23 @@
+[Unit]
+Description=Melon Pedal: mod-host (LV2 plugin host)
+After=melon-jack.service
+BindsTo=melon-jack.service
+Wants=melon-pedald.service
+PartOf=melon-pedal.target
+StartLimitIntervalSec=0
+
+[Service]
+User=__USER__
+SupplementaryGroups=audio
+EnvironmentFile=/etc/default/melon-pedal
+# give JACK a moment to come up; if it isn't ready, mod-host fails and is restarted
+ExecStartPre=/bin/sleep 2
+ExecStart=__MODHOST__ -n -p ${MODHOST_PORT}
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
+CPUAffinity=2 3
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=melon-pedal.target

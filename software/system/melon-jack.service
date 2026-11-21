@@ -1,0 +1,23 @@
+[Unit]
+Description=Melon Pedal: JACK audio server
+After=sound.target
+Wants=melon-modhost.service
+PartOf=melon-pedal.target
+StartLimitIntervalSec=0
+
+[Service]
+User=__USER__
+SupplementaryGroups=audio
+EnvironmentFile=/etc/default/melon-pedal
+Environment=JACK_NO_AUDIO_RESERVATION=1
+ExecStartPre=+/usr/local/lib/melon-pedal/cpu-performance.sh
+ExecStart=/usr/local/lib/melon-pedal/start-jack.sh
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
+# audio on cores 2-3, controller and display on 0-1 (software architecture §3.1)
+CPUAffinity=2 3
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=melon-pedal.target

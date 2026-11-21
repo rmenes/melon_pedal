@@ -1,0 +1,15 @@
+# Settings for the Melon Pedal services (copied to /etc/default/melon-pedal on first install).
+# After a change: sudo systemctl restart melon-pedal.target
+
+# Audio interface and JACK buffer (same as the manual jackd command)
+JACK_DEVICE=hw:MomixCab
+JACK_RATE=48000
+JACK_PERIOD=256
+JACK_NPERIODS=3
+JACK_EXTRA=
+
+# mod-host command port
+MODHOST_PORT=5555
+
+# Extra options for the controller, e.g. "--preset 1" or "--capture system:capture_2"
+PEDALD_ARGS=

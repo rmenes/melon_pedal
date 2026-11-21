@@ -1,0 +1,6 @@
+[Unit]
+Description=Melon Pedal (JACK + mod-host + controller + display)
+Wants=melon-jack.service melon-modhost.service melon-pedald.service melon-display.service
+
+[Install]
+WantedBy=multi-user.target
