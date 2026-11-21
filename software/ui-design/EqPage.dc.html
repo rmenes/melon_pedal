@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GraphicEQ page</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&amp;family=Barlow+Semi+Condensed:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#A6E07A}a:hover{color:#C9F0A8}
+</style>
+</helmet>
+<div style="width: 640px; height: 480px; overflow: hidden; background: #000000">
+<div style="width: 320px; height: 240px; transform: scale(2); transform-origin: 0 0; background: #0D1610; color: #F3ECD6; font-family: 'Barlow Semi Condensed', sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+<div style="height: 20px; flex-shrink: 0; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: #93AC9A; border-bottom: 1px solid #21392B">
+<span style="letter-spacing: 0.04em">BANK 1</span>
+<span style="display: flex; gap: 4px; align-items: center" aria-label="page 3 of 8"><sc-for list="{{dots}}" as="d" hint-placeholder-count="8"><span style="width: 6px; height: 6px; border-radius: 3px; background: {{d.c}}"></span></sc-for></span>
+<span>CPU 21%</span>
+</div>
+
+<div style="height: 26px; flex-shrink: 0; padding: 0 8px; display: flex; align-items: center; gap: 6px">
+<span style="font-family: Fredoka, sans-serif; font-weight: 600; font-size: 18px; color: #A6E07A">01</span>
+<span style="font-family: Fredoka, sans-serif; font-weight: 500; font-size: 18px; flex-grow: 1">Clean Sparkle</span>
+<span style="font-size: 12px; font-weight: 600; color: #93AC9A">GraphicEQ · bands 9–12</span>
+</div>
+
+<div style="height: 92px; flex-shrink: 0; padding: 0 6px; position: relative">
+<div style="position: absolute; left: 84px; top: 0; width: 41px; height: 78px; background: #1F3A2A; border-radius: 4px"></div>
+<div style="position: absolute; left: 6px; right: 6px; top: 39px; height: 1px; background: #2E4A39"></div>
+<div style="position: relative; height: 78px; display: flex; gap: 3px">
+<sc-for list="{{bands}}" as="b" hint-placeholder-count="31">
+<div style="width: 7px; display: flex; flex-direction: column">
+<div style="height: 39px; display: flex; flex-direction: column; justify-content: flex-end"><div style="height: {{b.up}}; background: {{b.c}}; border-radius: 2px 2px 0 0"></div></div>
+<div style="height: 39px"><div style="height: {{b.down}}; background: {{b.c}}; border-radius: 0 0 2px 2px"></div></div>
+</div>
+</sc-for>
+</div>
+<div style="position: relative; height: 14px; font-size: 11px; font-weight: 600; color: #93AC9A">
+<span style="position: absolute; left: 0px">20</span>
+<span style="position: absolute; left: 66px">100</span>
+<span style="position: absolute; left: 170px">1k</span>
+<span style="position: absolute; left: 266px">10k</span>
+<span style="position: absolute; right: 0px">Hz</span>
+</div>
+</div>
+
+<div style="flex-grow: 1; padding: 0 6px 6px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 4px">
+<sc-for list="{{tiles}}" as="t" hint-placeholder-count="4">
+<div style="background: #172A1F; border-radius: 6px; padding: 0 8px; display: flex; align-items: center; gap: 6px; min-width: 0">
+<span style="width: 18px; height: 18px; flex-shrink: 0; border-radius: 9px; border: 2px solid #2E4A39; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #93AC9A">{{t.num}}</span>
+<div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0">
+<span style="font-size: 12px; font-weight: 600; color: #93AC9A">{{t.label}}</span>
+<div style="position: relative; height: 4px; border-radius: 2px; background: #2E4A39"><div style="position: absolute; top: 0; bottom: 0; left: {{t.l}}; width: {{t.w}}; background: #A6E07A; border-radius: 2px"></div><div style="position: absolute; left: 50%; top: -2px; width: 1px; height: 8px; background: #93AC9A"></div></div>
+</div>
+<span style="font-size: 20px; font-weight: 600; white-space: nowrap">{{t.value}}<span style="font-size: 11px; color: #93AC9A; margin-left: 1px">dB</span></span>
+</div>
+</sc-for>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":640,"height":480}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const g = [0,1,2,2.5,3,3,2.5,2,4.5,3,-1.5,-3,-4,-4.5,-4,-3,-2,-1,0,1,2,3,3.5,4,4,3.5,3,2,1,0,-1];
+    const bands = g.map((v, i) => {
+      const px = Math.max(1, Math.round(Math.abs(v) * 3));
+      const on = i >= 8 && i <= 11;
+      return { up: v >= 0 ? px + 'px' : '0px', down: v < 0 ? px + 'px' : '0px', c: on ? '#A6E07A' : '#3E5C49' };
+    });
+    const dots = [0,1,2,3,4,5,6,7].map((i) => ({ c: i === 2 ? '#F3ECD6' : '#3E5C49' }));
+    const t = (num, label, v) => {
+      const f = v / 24;
+      return { num, label, value: (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1),
+        l: (f >= 0 ? 50 : 50 + f * 100) + '%', w: Math.abs(f * 100) + '%' };
+    };
+    return { bands, dots, tiles: [t('1', '125 Hz', 4.5), t('2', '160 Hz', 3), t('3', '200 Hz', -1.5), t('4', '250 Hz', -3)] };
+  }
+}
+</script>
+</body>
+</html>

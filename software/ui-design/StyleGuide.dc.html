@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LCD GUI style guide</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&amp;family=Barlow+Semi+Condensed:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#A6E07A}a:hover{color:#C9F0A8}
+</style>
+</helmet>
+<div style="width: 1360px; height: 760px; box-sizing: border-box; padding: 40px 48px; background: #0D1610; color: #F3ECD6; font-family: 'Barlow Semi Condensed', sans-serif; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px">
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-family: Fredoka, sans-serif; font-weight: 600; font-size: 26px">Colors</h2>
+<sc-for list="{{colors}}" as="c" hint-placeholder-count="9">
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="width: 44px; height: 44px; flex-shrink: 0; border-radius: 8px; background: {{c.hex}}; border: 1px solid #2E4A39"></span>
+<div style="display: flex; flex-direction: column">
+<span style="font-size: 17px; font-weight: 700">{{c.name}} <span style="font-weight: 500; color: #93AC9A">{{c.hex}}</span></span>
+<span style="font-size: 14px; color: #93AC9A">{{c.use}}</span>
+</div>
+</div>
+</sc-for>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-family: Fredoka, sans-serif; font-weight: 600; font-size: 26px">Type (shown at 2×)</h2>
+<p style="margin: 0; font-size: 15px; color: #93AC9A">Fredoka for names, Barlow Semi Condensed for numbers and labels (narrow, clear digits). Both OFL; ship the TTFs on the pedal.</p>
+<div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px">
+<div style="display: flex; align-items: baseline; gap: 12px"><span style="width: 70px; font-size: 14px; color: #93AC9A">68 px</span><span style="font-size: 72px; font-weight: 700; line-height: 1">62</span><span style="font-size: 14px; color: #93AC9A">pop-up value</span></div>
+<div style="display: flex; align-items: baseline; gap: 12px"><span style="width: 70px; font-size: 14px; color: #93AC9A">26 px</span><span style="font-family: Fredoka, sans-serif; font-weight: 500; font-size: 52px; line-height: 1">Crunch</span><span style="font-size: 14px; color: #93AC9A">preset name</span></div>
+<div style="display: flex; align-items: baseline; gap: 12px"><span style="width: 70px; font-size: 14px; color: #93AC9A">24 px</span><span style="font-size: 48px; font-weight: 600; line-height: 1">4.8 kHz</span><span style="font-size: 14px; color: #93AC9A">tile value</span></div>
+<div style="display: flex; align-items: baseline; gap: 12px"><span style="width: 70px; font-size: 14px; color: #93AC9A">17 px</span><span style="font-family: Fredoka, sans-serif; font-weight: 500; font-size: 34px; line-height: 1">Presets</span><span style="font-size: 14px; color: #93AC9A">list item</span></div>
+<div style="display: flex; align-items: baseline; gap: 12px"><span style="width: 70px; font-size: 14px; color: #93AC9A">13 px</span><span style="font-size: 26px; font-weight: 500; line-height: 1">Melon Drive · page 1/2</span></div>
+<div style="display: flex; align-items: baseline; gap: 12px"><span style="width: 70px; font-size: 14px; color: #93AC9A">12 px</span><span style="font-size: 24px; font-weight: 600; letter-spacing: 0.05em; color: #93AC9A; line-height: 1">TONE · CPU 18%</span><span style="font-size: 14px; color: #93AC9A">minimum</span></div>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-family: Fredoka, sans-serif; font-weight: 600; font-size: 26px">Corner = knob</h2>
+<div style="align-self: center; width: 250px; height: 300px; border: 2px solid #2E4A39; border-radius: 14px; position: relative; background: #13221A">
+<span style="position: absolute; top: 8px; left: 0; right: 0; text-align: center; font-size: 12px; color: #93AC9A">back edge · jacks</span>
+<span style="position: absolute; left: 22px; top: 52px; width: 40px; height: 40px; border-radius: 20px; background: #2E4A39; display: flex; align-items: center; justify-content: center; font-weight: 700">K1</span>
+<span style="position: absolute; right: 22px; top: 52px; width: 40px; height: 40px; border-radius: 20px; background: #2E4A39; display: flex; align-items: center; justify-content: center; font-weight: 700">K2</span>
+<span style="position: absolute; left: 22px; top: 150px; width: 40px; height: 40px; border-radius: 20px; background: #2E4A39; display: flex; align-items: center; justify-content: center; font-weight: 700">K3</span>
+<span style="position: absolute; right: 22px; top: 150px; width: 40px; height: 40px; border-radius: 20px; background: #2E4A39; display: flex; align-items: center; justify-content: center; font-weight: 700">K4</span>
+<div style="position: absolute; left: 75px; top: 76px; width: 100px; height: 90px; border-radius: 4px; background: #0D1610; border: 1px solid #A6E07A; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; padding: 4px; box-sizing: border-box">
+<span style="background: #172A1F; border-radius: 3px; font-size: 12px; display: flex; align-items: center; justify-content: center">1</span><span style="background: #172A1F; border-radius: 3px; font-size: 12px; display: flex; align-items: center; justify-content: center">2</span><span style="background: #172A1F; border-radius: 3px; font-size: 12px; display: flex; align-items: center; justify-content: center">3</span><span style="background: #172A1F; border-radius: 3px; font-size: 12px; display: flex; align-items: center; justify-content: center">4</span>
+</div>
+<span style="position: absolute; left: 117px; top: 212px; width: 14px; height: 14px; border-radius: 7px; background: #C8262B"></span>
+<span style="position: absolute; left: 75px; top: 238px; width: 100px; height: 40px; border-radius: 20px; background: #2E4A39; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700">FOOTSWITCH</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px; font-size: 15px">
+<div style="display: flex; justify-content: space-between; border-bottom: 1px solid #21392B; padding-bottom: 3px"><span style="color: #93AC9A">Knob turn</span><span>its tile's parameter</span></div>
+<div style="display: flex; justify-content: space-between; border-bottom: 1px solid #21392B; padding-bottom: 3px"><span style="color: #93AC9A">K1 push</span><span>menu / back</span></div>
+<div style="display: flex; justify-content: space-between; border-bottom: 1px solid #21392B; padding-bottom: 3px"><span style="color: #93AC9A">K2 push</span><span>next page</span></div>
+<div style="display: flex; justify-content: space-between; border-bottom: 1px solid #21392B; padding-bottom: 3px"><span style="color: #93AC9A">K3 hold</span><span>fine adjust</span></div>
+<div style="display: flex; justify-content: space-between; border-bottom: 1px solid #21392B; padding-bottom: 3px"><span style="color: #93AC9A">K4 long push</span><span>save preset</span></div>
+<div style="display: flex; justify-content: space-between; border-bottom: 1px solid #21392B; padding-bottom: 3px"><span style="color: #93AC9A">Double push</span><span>reset to default</span></div>
+<div style="display: flex; justify-content: space-between"><span style="color: #93AC9A">Footswitch</span><span>tap bypass · hold next preset</span></div>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1360,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      colors: [
+        { name: 'Ground', hex: '#0D1610', use: 'screen background' },
+        { name: 'Surface', hex: '#172A1F', use: 'tiles, cards' },
+        { name: 'Line', hex: '#2E4A39', use: 'arc track, borders, idle dots' },
+        { name: 'Rind (brand)', hex: '#1E3A2B', use: 'boot screen only' },
+        { name: 'Cream', hex: '#F3ECD6', use: 'main text' },
+        { name: 'Sage', hex: '#93AC9A', use: 'labels, units, hints' },
+        { name: 'Lime (accent)', hex: '#A6E07A', use: 'values, selection, in tune' },
+        { name: 'Amber', hex: '#FFB547', use: 'edited, fine, loading, out of tune' },
+        { name: 'Bypass red', hex: '#C8262B', use: 'BYPASS bar only (white text)' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

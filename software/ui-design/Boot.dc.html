@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Boot screen</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&amp;family=Barlow+Semi+Condensed:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#A6E07A}a:hover{color:#C9F0A8}
+</style>
+</helmet>
+<div style="width: 640px; height: 480px; overflow: hidden; background: #000000">
+<div style="width: 320px; height: 240px; transform: scale(2); transform-origin: 0 0; background: #1E3A2B; color: #F3ECD6; font-family: 'Barlow Semi Condensed', sans-serif; display: flex; flex-direction: column; align-items: center; overflow: hidden">
+
+<div style="margin-top: 22px; display: flex; align-items: center; gap: 10px">
+<svg width="52" height="30" viewBox="0 0 64 36" role="img" aria-label="Melon logo"><path d="M2 3a30 30 0 0 0 60 0z" fill="#A6E07A"></path><path d="M7 3a25 25 0 0 0 50 0z" fill="#FF7B8A"></path><ellipse cx="22" cy="11" rx="1.6" ry="2.4" fill="#1E3A2B"></ellipse><ellipse cx="32" cy="16" rx="1.6" ry="2.4" fill="#1E3A2B"></ellipse><ellipse cx="42" cy="11" rx="1.6" ry="2.4" fill="#1E3A2B"></ellipse></svg>
+<span style="font-family: Fredoka, sans-serif; font-weight: 600; font-size: 46px; line-height: 1">melon</span>
+</div>
+<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.3em; color: #B9CDBE; margin-top: 2px">EFFECTS PEDAL</div>
+
+<div style="margin-top: 16px; width: 220px; display: flex; flex-direction: column; gap: 3px; font-size: 14px; font-weight: 600">
+<div style="display: flex; justify-content: space-between"><span>Audio · JACK 48 kHz</span><span style="color: #A6E07A">✓</span></div>
+<div style="display: flex; justify-content: space-between"><span>Plugin host</span><span style="color: #A6E07A">✓</span></div>
+<div style="display: flex; justify-content: space-between"><span>Preset 03 Crunch Lead</span><span style="color: #F3ECD6">…</span></div>
+<div style="display: flex; justify-content: space-between; color: #B9CDBE"><span>Wi-Fi · melon.local</span><span>·</span></div>
+</div>
+
+<div style="flex-grow: 1"></div>
+<div style="margin-bottom: 10px; font-size: 12px; font-weight: 600; color: #B9CDBE">Dry signal passes while the pedal starts</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":640,"height":480}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

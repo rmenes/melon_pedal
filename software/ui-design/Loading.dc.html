@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Loading plugin</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&amp;family=Barlow+Semi+Condensed:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#A6E07A}a:hover{color:#C9F0A8}
+</style>
+</helmet>
+<div style="width: 640px; height: 480px; overflow: hidden; background: #000000">
+<div style="width: 320px; height: 240px; transform: scale(2); transform-origin: 0 0; background: #0D1610; color: #F3ECD6; font-family: 'Barlow Semi Condensed', sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+<div style="height: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #FFB547; color: #0D1610; font-size: 14px; font-weight: 700; letter-spacing: 0.12em">DRY SIGNAL · LOADING</div>
+
+<div style="flex-grow: 1; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px">
+<div style="font-family: Fredoka, sans-serif; font-weight: 600; font-size: 26px; text-align: center">Melon Drive</div>
+<div style="height: 8px; border-radius: 4px; background: #2E4A39; position: relative"><div style="position: absolute; left: 0; top: 0; bottom: 0; width: 55%; border-radius: 4px; background: #A6E07A"></div></div>
+<div style="display: flex; flex-direction: column; gap: 3px; margin-top: 4px; font-size: 14px; font-weight: 600">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="5">
+<div style="display: flex; align-items: center; gap: 8px; color: {{s.c}}">
+<span style="width: 14px; text-align: center">{{s.icon}}</span><span>{{s.t}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":640,"height":480}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const done = { icon: '✓', c: '#93AC9A' };
+    return {
+      steps: [
+        { ...done, t: 'Relays to true bypass' },
+        { ...done, t: 'Remove Melon GraphicEQ' },
+        { icon: '›', c: '#F3ECD6', t: 'Add Melon Drive' },
+        { icon: '·', c: '#7A9582', t: 'Connect mono 1→1 (IN L → OUT L+R)' },
+        { icon: '·', c: '#7A9582', t: 'Apply preset 04 Fat Rhythm' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

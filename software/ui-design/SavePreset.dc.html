@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Save preset</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&amp;family=Barlow+Semi+Condensed:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#A6E07A}a:hover{color:#C9F0A8}
+</style>
+</helmet>
+<div style="width: 640px; height: 480px; overflow: hidden; background: #000000">
+<div style="width: 320px; height: 240px; transform: scale(2); transform-origin: 0 0; background: #0D1610; color: #F3ECD6; font-family: 'Barlow Semi Condensed', sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+<div style="height: 24px; flex-shrink: 0; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #21392B">
+<span style="font-family: Fredoka, sans-serif; font-weight: 600; font-size: 16px">Save preset</span>
+<span style="font-size: 12px; font-weight: 600; color: #93AC9A">Melon Drive</span>
+</div>
+
+<div style="height: 50px; flex-shrink: 0; padding: 0 10px; display: flex; align-items: center; justify-content: center; gap: 1px">
+<sc-for list="{{chars}}" as="c" hint-placeholder-count="13">
+<span style="width: 18px; height: 34px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-family: Fredoka, sans-serif; font-weight: 500; font-size: 24px; background: {{c.bg}}; color: {{c.fg}}; border-bottom: 2px solid {{c.line}}">{{c.ch}}</span>
+</sc-for>
+</div>
+
+<div style="height: 26px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 16px; font-weight: 600; color: #7A9582">
+<span>9</span><span>0</span><span>1</span><span style="color: #A6E07A; font-size: 20px; font-weight: 700">2</span><span>3</span><span>4</span><span>␣</span>
+</div>
+
+<div style="flex-grow: 1; padding: 4px 6px 6px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 6px">
+<sc-for list="{{tiles}}" as="t" hint-placeholder-count="4">
+<div style="background: {{t.bg}}; color: {{t.fg}}; border-radius: 8px; padding: 0 8px; display: flex; align-items: center; gap: 8px">
+<span style="width: 18px; height: 18px; flex-shrink: 0; border-radius: 9px; border: 2px solid {{t.ring}}; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700">{{t.num}}</span>
+<div style="display: flex; flex-direction: column">
+<span style="font-size: 12px; font-weight: 600; opacity: 0.85">{{t.label}}</span>
+<span style="font-size: 17px; font-weight: 700">{{t.value}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":640,"height":480}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const name = 'Fat Rhythm 2';
+    const cur = 11;
+    const chars = name.split('').concat([' ']).map((ch, i) => ({
+      ch: ch === ' ' ? ' ' : ch,
+      bg: i === cur ? '#A6E07A' : 'transparent',
+      fg: i === cur ? '#0D1610' : '#F3ECD6',
+      line: i === cur ? '#A6E07A' : '#2E4A39'
+    }));
+    const n = { bg: '#172A1F', fg: '#F3ECD6', ring: '#2E4A39' };
+    return {
+      chars,
+      tiles: [
+        { ...n, num: '1', label: 'turn: cursor', value: '◂ 12/16 ▸' },
+        { ...n, num: '2', label: 'turn: character', value: 'A a 0 –' },
+        { ...n, num: '3', label: 'turn: slot', value: '1-05 (empty)' },
+        { bg: '#A6E07A', fg: '#0D1610', ring: '#0D1610', num: '4', label: 'push', value: 'Save' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

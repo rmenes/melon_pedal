@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Menu</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&amp;family=Barlow+Semi+Condensed:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#A6E07A}a:hover{color:#C9F0A8}
+</style>
+</helmet>
+<div style="width: 640px; height: 480px; overflow: hidden; background: #000000">
+<div style="width: 320px; height: 240px; transform: scale(2); transform-origin: 0 0; background: #0D1610; color: #F3ECD6; font-family: 'Barlow Semi Condensed', sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+<div style="height: 24px; flex-shrink: 0; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #21392B">
+<span style="font-family: Fredoka, sans-serif; font-weight: 600; font-size: 16px">Menu</span>
+<span style="font-size: 12px; font-weight: 600; color: #93AC9A">03 Crunch Lead</span>
+</div>
+
+<div style="flex-grow: 1; padding: 6px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 6px">
+
+<div style="background: #A6E07A; color: #0D1610; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0D1610" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12"></path><path d="M8 12h12"></path><path d="M8 18h12"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg>
+<span style="font-family: Fredoka, sans-serif; font-weight: 600; font-size: 17px">Presets</span>
+</div>
+
+<div style="background: #172A1F; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#93AC9A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v5"></path><path d="M15 2v5"></path><path d="M6 7h12v4a6 6 0 0 1-12 0z"></path><path d="M12 17v5"></path></svg>
+<span style="font-family: Fredoka, sans-serif; font-weight: 500; font-size: 17px">Plugins</span>
+</div>
+
+<div style="background: #172A1F; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#93AC9A" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 17a9 9 0 0 1 18 0"></path><path d="M12 17l4-6"></path><circle cx="12" cy="17" r="1.5"></circle></svg>
+<span style="font-family: Fredoka, sans-serif; font-weight: 500; font-size: 17px">Tuner</span>
+</div>
+
+<div style="background: #172A1F; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#93AC9A" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"></circle><circle cx="7" cy="12" r="1"></circle><circle cx="17" cy="12" r="1"></circle><circle cx="8.5" cy="8" r="1"></circle><circle cx="15.5" cy="8" r="1"></circle><circle cx="12" cy="6.5" r="1"></circle><path d="M10 18h4"></path></svg>
+<span style="font-family: Fredoka, sans-serif; font-weight: 500; font-size: 17px">MIDI</span>
+</div>
+
+<div style="background: #172A1F; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#93AC9A" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16"></path><path d="M4 12h16"></path><path d="M4 18h16"></path><circle cx="9" cy="6" r="2" fill="#172A1F"></circle><circle cx="15" cy="12" r="2" fill="#172A1F"></circle><circle cx="7" cy="18" r="2" fill="#172A1F"></circle></svg>
+<span style="font-family: Fredoka, sans-serif; font-weight: 500; font-size: 17px">Settings</span>
+</div>
+
+<div style="background: #172A1F; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#93AC9A" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"></circle><path d="M12 11v6"></path><circle cx="12" cy="7.5" r="0.8"></circle></svg>
+<span style="font-family: Fredoka, sans-serif; font-weight: 500; font-size: 17px">System</span>
+</div>
+
+</div>
+
+<div style="height: 22px; flex-shrink: 0; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: #93AC9A; border-top: 1px solid #21392B">
+<span style="display: flex; align-items: center; gap: 4px"><span style="width: 14px; height: 14px; border-radius: 7px; border: 1.5px solid #93AC9A; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 10px">1</span>turn: move · push: back</span>
+<span style="display: flex; align-items: center; gap: 4px"><span style="width: 14px; height: 14px; border-radius: 7px; border: 1.5px solid #A6E07A; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #A6E07A">4</span>push: open</span>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":640,"height":480}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

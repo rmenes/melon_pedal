@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tuner</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&amp;family=Barlow+Semi+Condensed:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#A6E07A}a:hover{color:#C9F0A8}
+</style>
+</helmet>
+<div style="width: 640px; height: 480px; overflow: hidden; background: #000000">
+<div style="width: 320px; height: 240px; transform: scale(2); transform-origin: 0 0; background: #0D1610; color: #F3ECD6; font-family: 'Barlow Semi Condensed', sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+<div style="height: 22px; flex-shrink: 0; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 700; border-bottom: 1px solid #21392B">
+<span style="letter-spacing: 0.08em; color: #93AC9A">TUNER</span>
+<span style="color: #0D1610; background: #FFB547; border-radius: 4px; padding: 1px 5px">OUTPUT MUTED</span>
+</div>
+
+<div style="height: 118px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 22px">
+<svg width="22" height="28" viewBox="0 0 22 28" aria-hidden="true"><path d="M20 2L4 14l16 12z" fill="{{flatArrow}}"></path></svg>
+<div style="display: flex; align-items: flex-end">
+<span style="font-family: Fredoka, sans-serif; font-weight: 600; font-size: 110px; line-height: 0.95; color: {{noteColor}}">{{note}}</span>
+<span style="font-family: Fredoka, sans-serif; font-weight: 500; font-size: 28px; color: #93AC9A; margin-bottom: 6px">{{oct}}</span>
+</div>
+<svg width="22" height="28" viewBox="0 0 22 28" aria-hidden="true"><path d="M2 2l16 12L2 26z" fill="{{sharpArrow}}"></path></svg>
+</div>
+
+<div style="padding: 0 12px; flex-shrink: 0">
+<div style="position: relative; height: 30px">
+<div style="position: absolute; left: 47%; width: 6%; top: 0; bottom: 0; background: #1F3A2A; border-radius: 3px"></div>
+<div style="position: absolute; inset: 0; display: flex; justify-content: space-between; align-items: center">
+<sc-for list="{{ticks}}" as="k" hint-placeholder-count="21"><span style="width: 2px; height: {{k.h}}; background: {{k.c}}; border-radius: 1px"></span></sc-for>
+</div>
+<div style="position: absolute; left: {{needle}}; top: -3px; width: 4px; height: 36px; margin-left: -2px; border-radius: 2px; background: {{noteColor}}"></div>
+</div>
+<div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: #93AC9A; margin-top: 2px"><span>−50</span><span style="font-size: 16px; font-weight: 700; color: #F3ECD6">{{cents}} ¢ · {{hz}} Hz</span><span>+50</span></div>
+</div>
+
+<div style="flex-grow: 1"></div>
+<div style="height: 22px; flex-shrink: 0; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: #93AC9A; border-top: 1px solid #21392B">
+<span>tap footswitch: exit</span>
+<span style="display: flex; align-items: center; gap: 4px"><span style="width: 14px; height: 14px; border-radius: 7px; border: 1.5px solid #93AC9A; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 10px">2</span>A4 = 440 Hz</span>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"cents":{"editor":"range","min":-50,"max":50,"step":1,"default":4},"$preview":{"width":640,"height":480}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const c = this.props.cents ?? 4;
+    const inTune = Math.abs(c) <= 3;
+    const col = inTune ? '#A6E07A' : '#FFB547';
+    const ticks = [];
+    for (let i = 0; i <= 20; i++) ticks.push({ h: (i === 10 ? 26 : i % 5 === 0 ? 18 : 10) + 'px', c: i === 10 ? '#F3ECD6' : '#3E5C49' });
+    return {
+      note: 'A', oct: '2', noteColor: col,
+      sharpArrow: c > 3 ? '#FFB547' : '#2E4A39',
+      flatArrow: c < -3 ? '#FFB547' : '#2E4A39',
+      needle: (50 + c) + '%',
+      cents: (c > 0 ? '+' : c < 0 ? '−' : '') + Math.abs(c),
+      hz: (110 * Math.pow(2, c / 1200)).toFixed(1),
+      ticks
+    };
+  }
+}
+</script>
+</body>
+</html>

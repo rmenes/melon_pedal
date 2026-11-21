@@ -1,0 +1,28 @@
+{"v":3,"createdOnFiles":{"v":1,"at":"2026-11-21T00:20:00Z"},"title":"Melon Pedal — LCD GUI","launch":{"view":"canvas"},"pages":[],
+"boards":{
+"Main.dc.html":{"x":0,"y":0,"w":640,"h":480,"title":"1 · Play"},
+"Bypass.dc.html":{"x":720,"y":0,"w":640,"h":480,"title":"2 · Play — bypassed"},
+"ValuePopup.dc.html":{"x":1440,"y":0,"w":640,"h":480,"title":"3 · Value pop-up (fine adjust in Tweaks)"},
+"EqPage.dc.html":{"x":2160,"y":0,"w":640,"h":480,"title":"4 · Play — GraphicEQ page 3/8"},
+"Menu.dc.html":{"x":0,"y":900,"w":640,"h":480,"title":"5 · Menu"},
+"Presets.dc.html":{"x":720,"y":900,"w":640,"h":480,"title":"6 · Preset browser"},
+"Plugins.dc.html":{"x":1440,"y":900,"w":640,"h":480,"title":"7 · Plugin browser"},
+"Loading.dc.html":{"x":2160,"y":900,"w":640,"h":480,"title":"8 · Loading plugin"},
+"Settings.dc.html":{"x":0,"y":1800,"w":640,"h":480,"title":"9 · Settings"},
+"SavePreset.dc.html":{"x":720,"y":1800,"w":640,"h":480,"title":"10 · Save preset"},
+"Tuner.dc.html":{"x":1440,"y":1800,"w":640,"h":480,"title":"11 · Tuner"},
+"MidiLearn.dc.html":{"x":2160,"y":1800,"w":640,"h":480,"title":"12 · MIDI learn"},
+"Boot.dc.html":{"x":0,"y":2700,"w":640,"h":480,"title":"13 · Boot"},
+"StyleGuide.dc.html":{"x":720,"y":2700,"w":1360,"h":760,"title":"Style guide — tokens, type, knob map"}
+},
+"order":["Main.dc.html","Bypass.dc.html","ValuePopup.dc.html","EqPage.dc.html","Menu.dc.html","Presets.dc.html","Plugins.dc.html","Loading.dc.html","Settings.dc.html","SavePreset.dc.html","Tuner.dc.html","MidiLearn.dc.html","Boot.dc.html","StyleGuide.dc.html"],
+"notes":{
+"t1":{"x":0,"y":-260,"text":"Playing","kind":"title1","maxW":2800},
+"t2":{"x":0,"y":640,"text":"Navigation","kind":"title1","maxW":2800},
+"t3":{"x":0,"y":1540,"text":"Editing & tools","kind":"title1","maxW":2800},
+"t4":{"x":0,"y":2440,"text":"System & style","kind":"title1","maxW":2800},
+"n1":{"x":2880,"y":0,"w":400,"fill":"green","size":"m","text":"Screens are drawn at the real 320×240 px and shown at 2×.\n\nCorner = knob: each tile sits in the corner of the screen nearest its knob (K1 top-left, K2 top-right, K3 bottom-left, K4 bottom-right, as in hardware §8.2).\n\n'Melon Drive' and the preset names are placeholders."},
+"n2":{"x":2880,"y":900,"w":400,"fill":"blue","size":"m","text":"Every list works the same way:\nK1 turn = move\nK1 push = back\nK4 push = open / load\nK2 turn = bank (presets)\n\nFootswitch tap still toggles bypass on every screen."},
+"n3":{"x":2880,"y":1800,"w":400,"fill":"orange","size":"m","text":"Stage-critical info (preset name, BYPASS, tuner note, value pop-up) is ≥24 px, about 3 mm or more on the 2\" panel, so it can be read standing.\n\nSmall 12 px text is only for things you read while bent over the pedal."}
+},
+"designSystems":[]}

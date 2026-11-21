@@ -1,6 +1,7 @@
 # Melon Pedal — Software Architecture (v0.2)
 
 **v0.2 (2026-11-17):** controller in Python confirmed · Melon Plugins stay on **JUCE**; added the JUCE-on-ARM plan (§7) and support for LV2 *parameters* (JUCE style) next to control ports.
+**2026-11-20:** §5 knob order fixed to match the hardware layout (K1/K2 on top); full LCD design in [lcd-gui-design.md](lcd-gui-design.md).
 
 Goal for the first version: **one LV2 plugin loaded at a time**, controlled from the pedal (4 encoders, footswitch, 2" LCD), from MIDI, and from a web page over Wi-Fi. Runs on **Raspberry Pi OS Lite (64-bit)** on the Raspberry Pi 4.
 
@@ -128,8 +129,10 @@ on_feedback(callback)          # output ports: meters, tuner, etc.
 
 ## 5. Pedal user interface
 
+Full screen design, tokens and control patterns: **[lcd-gui-design.md](lcd-gui-design.md)**.
+
 ### 5.1 Screens (320 × 240)
-- **Play** (default): preset number and name, plugin name, **four parameter tiles laid out like the physical knobs** (3 and 4 on top, 1 and 2 below), page dots. Header shows CPU load and buffer size, and a red **BYPASS** badge when bypassed.
+- **Play** (default): preset number and name, plugin name, **four parameter tiles laid out like the physical knobs** (1 and 2 on top, 3 and 4 below, matching hardware §8.2: K1/K2 sit near the back edge, which is the top of the screen), page dots. Header shows CPU load and buffer size, and a red **BYPASS** badge when bypassed.
 - **Value pop-up**: turning a knob shows its parameter large for ~1 s.
 - **Pages**: plugins with more than four parameters get pages of four. Example: Melon GraphicEQ with 31 bands → 8 pages; the graph highlights the 4 bands on the knobs.
 - **Preset browser**, **plugin browser**, **settings** (input mode, MIDI channel, Wi-Fi info, buffer size).
