@@ -557,3 +557,119 @@ def save_screen(st):
         hint_tile(c, 6 + (i % 2) * (gw + 6), 104 + (i // 2) * (gh + 6), gw, gh, i + 1,
                   t.get("label", ""), t.get("value", ""), t.get("accent", False))
     return c.image()
+
+
+# ---------------------------------------------------------------- tuner (Melon Tuner, page 1)
+
+TUNER_CX, TUNER_CY, TUNER_R = 160, 214, 132      # needle pivot and scale radius
+DEG_PER_CENT = 0.9                                # +-50 cents = +-45 degrees
+
+
+def _tuner_point(cents, r):
+    a = math.radians(-90 + max(-50.0, min(50.0, cents)) * DEG_PER_CENT)
+    return TUNER_CX + r * math.cos(a), TUNER_CY + r * math.sin(a)
+
+
+def tuner(st, idle=None):
+    """Tuner screen. st["tuner"] = {tuning, strings, reference, mute, reading};
+    reading = {note, acc, octave, cents, hz, string, hint, in_tune} or None.
+    idle = seconds since the last note (the last reading stays, dimmed, for 1.5 s)."""
+    t = st.get("tuner") or {}
+    r = t.get("reading") or t.get("last")
+    fading = t.get("reading") is None and r is not None and idle is not None and idle < 1.5
+    if t.get("reading") is None and not fading:
+        r = None
+    bypassed, muted = bool(st.get("bypass")), bool(t.get("mute"))
+    c = Canvas()
+
+    # top: BYPASS bar, or the normal header
+    if bypassed:
+        c.rect(0, 0, W, 22, fill=BYPASS_RED)
+        c.text(W / 2, 16.5, "BYPASS · SIGNAL PASSES", font("barlow", 700, 14), "#FFFFFF", anchor="ms", spacing=1.5)
+    else:
+        header(c, st)
+
+    # output state chip + tuning / reference
+    fchip = font("barlow", 700, 12)
+    if not bypassed:
+        label, bg, fg = ("MUTED", AMBER, GROUND) if muted else ("LIVE", None, LIME)
+        w = c.textw(label, fchip, 1) + 14
+        c.rect(8, 27, w, 18, fill=bg, r=5, outline=None if bg else LIME, width=1.5)
+        c.text(8 + w / 2, 40.5, label, fchip, fg, anchor="ms", spacing=1)
+    fr = font("barlow", 600, 13)
+    ref = float(t.get("reference", 440) or 440)
+    right = f"{t.get('tuning', 'Chromatic')} · A4 {ref:g} Hz"
+    c.text(W - 8, 40.5, c.fit(right, fr, W - 90), fr, SAGE, anchor="rs")
+
+    # strings of the tuning
+    strings = t.get("strings") or []
+    if strings:
+        fs = font("barlow", 700, 13)
+        bw, gap = 30, 4
+        x0 = (W - (len(strings) * (bw + gap) - gap)) / 2
+        cur = r.get("string") if r else None
+        for i, name in enumerate(strings):
+            x = x0 + i * (bw + gap)
+            on = cur == i and not fading
+            col = (LIME if r.get("in_tune") else AMBER) if on else None
+            c.rect(x, 51, bw, 17, fill=col or SURFACE, r=4)
+            c.text(x + bw / 2, 64, name, fs, GROUND if on else SAGE, anchor="ms")
+
+    # scale: arc, ticks every 10 cents, labels
+    cx, cy, R = TUNER_CX, TUNER_CY, TUNER_R
+    c.arc(cx, cy, R, -90 - 50 * DEG_PER_CENT, -90 + 50 * DEG_PER_CENT, LINE, 3)
+    fl = font("barlow", 600, 11)
+    for cents in range(-50, 51, 10):
+        major = cents in (-50, 0, 50)
+        x1, y1 = _tuner_point(cents, R - (12 if major else 7))
+        x2, y2 = _tuner_point(cents, R)
+        col = LIME if cents == 0 else (SAGE if major else IDLE)
+        c.d.line([(x1 * S, y1 * S), (x2 * S, y2 * S)], fill=col, width=int((3 if major else 2) * S))
+    for cents, txt in ((-50, "−50"), (50, "+50")):
+        x, y = _tuner_point(cents, R + 12)
+        c.text(x, y + 4, txt, fl, DIM, anchor="ms")
+    # in-tune window (+-2 cents)
+    c.arc(cx, cy, R, -90 - 2 * DEG_PER_CENT, -90 + 2 * DEG_PER_CENT, LIME if r and r.get("in_tune") and not fading else IDLE, 5)
+
+    # flat / sharp lights either side of the note (both lime when in tune)
+    def light(x, d, on, col):
+        y = 172
+        pts = [(x - 7 * d, y - 8), (x - 7 * d, y + 8), (x + 8 * d, y)]
+        c.d.polygon([(px * S, py * S) for px, py in pts], fill=col if on else IDLE)
+    live = r is not None and not fading
+    cents = float(r.get("cents", 0)) if r else 0.0
+    in_tune = live and r.get("in_tune")
+    light(82, -1, live and (in_tune or cents < 0), LIME if in_tune else AMBER)
+    light(238, 1, live and (in_tune or cents > 0), LIME if in_tune else AMBER)
+
+    # needle
+    if r is not None:
+        col = (LIME if in_tune else AMBER) if live else IDLE
+        x1, y1 = _tuner_point(cents, 96)
+        x2, y2 = _tuner_point(cents, R + 6)
+        c.d.line([(x1 * S, y1 * S), (x2 * S, y2 * S)], fill=col, width=int(4 * S))
+        c.circle(x2, y2, 2, fill=col)
+
+    # note name, accidental, octave
+    if r is not None:
+        col = CREAM if live else IDLE
+        fn, fa, fo = font("fredoka", 600, 58), font("fredoka", 600, 24), font("barlow", 700, 16)
+        note, acc, octave = str(r.get("note", "")), str(r.get("acc", "")), str(r.get("octave", ""))
+        nw = c.textw(note, fn)
+        aw = max(c.textw(acc, fa), c.textw(octave, fo)) if (acc or octave) else 0
+        x = W / 2 - (nw + 3 + aw) / 2
+        c.text(x, 190, note, fn, col)
+        if acc:
+            c.text(x + nw + 3, 158, acc, fa, col)
+        c.text(x + nw + 3, 190, octave, fo, SAGE if live else IDLE)
+        fv = font("barlow", 600, 15)
+        cents_txt = ("+" if cents > 0.05 else "−" if cents < -0.05 else "") + f"{abs(cents):.1f} ¢"
+        c.text(10, 211, cents_txt, fv, (LIME if in_tune else AMBER) if live else IDLE)
+        c.text(W - 10, 211, f"{float(r.get('hz', 0)):.1f} Hz", fv, SAGE if live else IDLE, anchor="rs")
+        if r.get("hint") and live:
+            c.text(W / 2, 211, r["hint"], font("barlow", 700, 14), AMBER, anchor="ms")
+    else:
+        c.text(W / 2, 180, "Play a note", font("fredoka", 500, 24), DIM, anchor="ms")
+
+    footer(c, [["1", "turn: mute · push: bypass"], ["2", "push: settings"]])
+    return c.image()

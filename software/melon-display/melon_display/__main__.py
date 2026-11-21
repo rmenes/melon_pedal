@@ -44,6 +44,13 @@ SAMPLE_EQ = {
     "params": [{"label": f"{EQ_FREQS[b]} Hz", "value": EQ_GAINS[b], "min": -12, "max": 12,
                 "unit": "dB", "default": 0, "band": b} for b in range(8, 12)],
 }
+TUNER_BASE = {
+    "screen": "tuner", "bank": "PLUGIN 16/16", "page": 1, "pages": 3, "midi": True,
+    "preset": {"number": "--", "name": "Melon Tuner"}, "plugin": "Melon Tuner",
+    "tuner": {"tuning": "Chromatic", "strings": [], "reference": 440.0, "mute": False, "reading": None},
+}
+TUNER_READING = {"note": "A", "acc": "", "octave": 2, "cents": -12.4, "hz": 109.2, "string": None,
+                 "hint": "", "in_tune": False}
 BOOT = {"screen": "boot", "boot": {"steps": [["Display", "ok"], ["Waiting for controller", "wait"]]}}
 
 
@@ -53,6 +60,10 @@ class Screen:
         self.st = copy.deepcopy(BOOT)
         self.popup, self.popup_until, self.fine = None, 0.0, False
         self.dirty, self.last = True, 0.0
+        self.tuner_idle_since = None        # time the last tuner note ended
+
+    def tuner_idle(self):
+        return None if self.tuner_idle_since is None else time.monotonic() - self.tuner_idle_since
 
     # ---- state
     def apply(self, m):
@@ -75,6 +86,22 @@ class Screen:
                     self.popup, self.popup_until = i, time.monotonic() + POPUP_SECONDS
         elif op == "fine":
             self.fine = bool(m.get("on"))
+        elif op == "tuner":                 # frequent: reading (or None) / mute
+            t = self.st.setdefault("tuner", {})
+            if "mute" in m:
+                t["mute"] = bool(m["mute"])
+            if "reading" in m:
+                r = m["reading"]
+                if r:
+                    t["last"], self.tuner_idle_since = r, None
+                elif t.get("reading") is not None:
+                    self.tuner_idle_since = time.monotonic()
+                t["reading"] = r
+            if self.st.get("screen") != "tuner":
+                return
+        if op == "update" and m.get("screen") == "tuner":
+            self.tuner_idle_since = None
+            self.st.get("tuner", {}).pop("last", None)
         self.dirty = True
 
     # ---- drawing
@@ -88,6 +115,8 @@ class Screen:
             return ui.list_screen(self.st)
         if scr == "save":
             return ui.save_screen(self.st)
+        if scr == "tuner":
+            return ui.tuner(self.st, idle=self.tuner_idle())
         pop = self.popup if time.monotonic() < self.popup_until or self.fine else None
         return ui.play(self.st, popup=pop, fine=self.fine)
 
@@ -100,6 +129,11 @@ class Screen:
         if self.popup is not None and not self.fine and now >= self.popup_until:
             self.popup = None
             self.dirty = True
+        idle = self.tuner_idle() if self.st.get("screen") == "tuner" else None
+        if idle is not None and idle >= 1.5:          # the dimmed last note goes away
+            self.tuner_idle_since = None
+            self.st.get("tuner", {}).pop("last", None)
+            self.dirty = True
         if self.dirty and now - self.last >= MIN_FRAME:
             self.lcd.show(self.frame())
             self.dirty, self.last = False, now
@@ -111,6 +145,9 @@ class Screen:
             t = min(t, max(0.0, self.popup_until - now))
         if self.dirty:
             t = min(t, max(0.0, MIN_FRAME - (now - self.last)))
+        idle = self.tuner_idle()
+        if idle is not None:
+            t = min(t, max(0.0, 1.5 - idle))
         return max(0.005, t)
 
 
@@ -189,6 +226,28 @@ def render_pngs(outdir):
         "eq": (SAMPLE_EQ, None, False),
         "boot": (BOOT, None, False),
     }
+    def tun(reading=None, **kw):
+        st = copy.deepcopy(TUNER_BASE)
+        st.update({k: v for k, v in kw.items() if k != "tuner"})
+        st["tuner"].update(kw.get("tuner", {}), reading=reading)
+        return st
+    tuner_cases = {
+        "tuner-idle": (tun(), None),
+        "tuner-flat": (tun(TUNER_READING), None),
+        "tuner-intune": (tun(dict(TUNER_READING, cents=0.8, hz=110.1, in_tune=True)), None),
+        "tuner-muted-sharp": (tun(dict(TUNER_READING, note="F", acc="#", octave=3, cents=21.0, hz=187.2),
+                                  tuner={"mute": True}), None),
+        "tuner-bypass": (tun(dict(TUNER_READING, cents=-3.5), bypass=True), None),
+        "tuner-strings": (tun(dict(TUNER_READING, note="G", octave=3, cents=-37.0, hz=191.9, string=3),
+                              tuner={"tuning": "Guitar Standard", "strings": ["E", "A", "D", "G", "B", "E"]}), None),
+        "tuner-tune-up": (tun(dict(TUNER_READING, note="E", octave=2, cents=-180.0, hz=74.4, string=0, hint="Tune up"),
+                              tuner={"tuning": "Guitar Drop D", "strings": ["D", "A", "D", "G", "B", "E"]}), None),
+        "tuner-fading": (tun(None, tuner={"last": dict(TUNER_READING, cents=1.5, in_tune=True)}), 0.5),
+    }
+    for name, (st, idle) in tuner_cases.items():
+        path = os.path.join(outdir, f"{name}.png")
+        ui.tuner(st, idle=idle).save(path)
+        print(path)
     for name, (st, pop, fine) in cases.items():
         img = ui.boot(st) if st.get("screen") == "boot" else ui.play(st, popup=pop, fine=fine)
         path = os.path.join(outdir, f"{name}.png")

@@ -52,6 +52,17 @@ the 2" screen: plugin, page, the 4 knob parameters, value pop-up when a knob mov
 GraphicEQ band graph. Install that service once; then just run the controller as usual.
 `--no-lcd` turns this off. If the display service isn't running, the controller works as before.
 
+## Melon Tuner
+
+Page 1 is the tuner screen: needle, note, cents and Hz, the strings of the selected tuning,
+and the output state (**LIVE**, **MUTED** or **BYPASS**). Knob 1 turn = *Mute when engaged*,
+press A = bypass (the tuner keeps reading in bypass). Push 2 = settings (tuning, reference,
+threshold, smoothing, output). Defaults: chromatic, A4 = 440 Hz.
+
+The reading comes from the plugin's read-only `readout` parameter (detected Hz), which mod-host
+passes to its **feedback port** (`mod-host -f 5556`; the controller uses `--port` + 1,
+change with `--feedback-port`). The log says `tuner: readings arriving from mod-host` once it works.
+
 ## Remote API (phone app over Bluetooth)
 
 The controller listens on **127.0.0.1:5601** (local only) for apps: one JSON object per line.

@@ -106,6 +106,14 @@ class Plugin:
     audio_in: list
     audio_out: list
     controls: list
+    readout: str = ""      # URI of a read-only value the plugin sends (Melon Tuner: Hz)
+
+    @property
+    def is_tuner(self):
+        return bool(self.readout)
+
+    def control(self, short_id):
+        return next((c for c in self.controls if c.short_id == short_id), None)
 
 
 def _num(x, default=0.0):
@@ -174,8 +182,11 @@ def load_bundle(path):
                 label = g.value(port, IRI(LV2 + "name"), sym)
                 if not _hidden(sym, label):
                     ports.append((idx, _control(g, port, "port", sym, label)))
-        params = []
+        params, readout = [], ""
         for p in g.objects(uri, IRI(PATCH + "writable")):
+            if str(p).rsplit(":", 1)[-1] == "readout":
+                readout = str(p)          # output, not a knob
+                continue
             label = g.value(p, IRI(RDFS + "label"), p.rsplit(":", 1)[-1])
             if not _hidden(p, label):
                 params.append((g.first_seen.get(p, 1e9), _control(g, p, "param", str(p), label)))
@@ -186,6 +197,7 @@ def load_bundle(path):
             audio_in=[s for _, s in sorted(audio_in)],
             audio_out=[s for _, s in sorted(audio_out)],
             controls=controls,
+            readout=readout,
         ))
     return plugins
 

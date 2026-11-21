@@ -12,7 +12,8 @@ SupplementaryGroups=audio
 EnvironmentFile=/etc/default/melon-pedal
 # give JACK a moment to come up; if it isn't ready, mod-host fails and is restarted
 ExecStartPre=/bin/sleep 2
-ExecStart=__MODHOST__ -n -p ${MODHOST_PORT}
+# -f: feedback port (values plugins send back, e.g. the Melon Tuner reading); melon-pedald reads MODHOST_PORT + 1
+ExecStart=__MODHOST__ -n -p ${MODHOST_PORT} -f 5556
 LimitRTPRIO=95
 LimitMEMLOCK=infinity
 CPUAffinity=2 3

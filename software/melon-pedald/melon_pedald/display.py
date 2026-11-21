@@ -28,6 +28,9 @@ class Display:
     def page(self, pedal, popup=False):
         """Full state: after loading a plugin or preset, changing page or bypass."""
         plugin = pedal.plugin
+        self.tuner_mute = None
+        if getattr(pedal, "tuner_visible", False):
+            return self._tuner_page(pedal)
         self.bands = _bands(plugin.controls)
         controls = pedal.page_controls()
         preset = pedal.presets.get(pedal.slot) if pedal.slot is not None else None
@@ -61,6 +64,9 @@ class Display:
 
     def value(self, k, control, value):
         """Knob k (0-3) changed `control` to `value`."""
+        if getattr(self, "tuner_mute", None) is control:      # tuner screen: knob 1 = Mute
+            self._send({"op": "tuner", "mute": value >= 0.5 * (control.minimum + control.maximum)})
+            return
         p = self._param(control, value)
         self._send({"op": "param", "index": k, "value": p["value"], "popup": True})
 
@@ -98,6 +104,26 @@ class Display:
                 {"label": "turn: slot", "value": where},
                 {"label": "push", "value": "Save", "accent": True},
             ]}})
+
+    def tuner(self, reading):
+        """A new tuner reading (tuner.reading() dict, or None = no note). Called ~50 times/s."""
+        self._send({"op": "tuner", "reading": reading})
+
+    def _tuner_page(self, pedal):
+        st = pedal.tuner_state()
+        self.tuner_mute = pedal.plugin.control("mute")
+        preset = pedal.presets.get(pedal.slot) if pedal.slot is not None else None
+        self._send({
+            "op": "update", "screen": "tuner", "midi": getattr(self, "midi_ok", True),
+            "bank": f"BANK {pedal.slot // 6 + 1}" if preset else f"PLUGIN {pedal.idx + 1}/{len(pedal.plugins)}",
+            "preset": {"number": f"{pedal.slot % 6 + 1:02d}" if preset else "--",
+                       "name": preset["name"] if preset else pedal.plugin.name, "edited": pedal.edited},
+            "plugin": pedal.plugin.name,
+            "page": pedal.page + 1, "pages": pedal.pages, "bypass": pedal.bypassed,
+            "params": [], "graph": None,
+            "tuner": {"tuning": st["tuning"], "strings": st["strings"], "reference": st["reference"],
+                      "mute": st["mute"], "reading": None},
+        })
 
     def midi(self, connected):
         self.midi_ok = connected

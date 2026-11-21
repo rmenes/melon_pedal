@@ -5,6 +5,7 @@ Every command is a text line ending in a NUL byte; mod-host answers
 "resp <n>" (n >= 0 is OK, negative is an error code).
 """
 import socket
+import threading
 import time
 
 INSTANCE = 0  # one-plugin rule: always instance 0
@@ -86,6 +87,62 @@ class ModHost:
 
     def bypass(self, on):
         return self.cmd(f"bypass {INSTANCE} {1 if on else 0}")
+
+
+class Feedback:
+    """Reads mod-host's feedback port (one NUL-terminated text message at a time).
+
+    Used for values the plugin sends to the host, e.g. Melon Tuner's reading:
+    "patch_set <instance> <parameter URI> <type> <value>" (older mod-host: no type).
+    Reconnects by itself when mod-host restarts. `on_patch(uri, value)` runs in this thread.
+    """
+
+    def __init__(self, on_patch, host="127.0.0.1", port=5556, verbose=False):
+        self.addr = (host, port)
+        self.on_patch = on_patch
+        self.verbose = verbose
+        self.connected = False
+
+    def start(self):
+        threading.Thread(target=self._run, daemon=True, name="modhost-feedback").start()
+
+    def _run(self):
+        warned = False
+        while True:
+            try:
+                with socket.create_connection(self.addr, timeout=5) as sock:
+                    sock.settimeout(None)
+                    self.connected, warned = True, False
+                    print(f"mod-host feedback connected ({self.addr[1]})")
+                    buf = b""
+                    while True:
+                        chunk = sock.recv(4096)
+                        if not chunk:
+                            break
+                        buf += chunk
+                        *msgs, buf = buf.split(b"\0")
+                        for m in msgs:
+                            self._message(m.decode(errors="replace").strip())
+            except OSError as e:
+                if not warned:
+                    print(f"! mod-host feedback port {self.addr[1]} not reachable ({e}); retrying")
+                    warned = True
+            self.connected = False
+            time.sleep(1)
+
+    def _message(self, text):
+        parts = text.split()
+        if self.verbose and parts and parts[0] != "patch_set":
+            print(f"  [feedback] {text}")
+        if len(parts) >= 4 and parts[0] == "patch_set" and parts[1] == str(INSTANCE):
+            try:
+                value = float(parts[-1])
+            except ValueError:
+                return
+            try:
+                self.on_patch(parts[2], value)
+            except Exception as e:          # never let the display kill the reader
+                print(f"! feedback handler: {e!r}")
 
 
 class FakeEngine(ModHost):

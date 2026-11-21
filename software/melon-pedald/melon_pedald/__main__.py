@@ -29,9 +29,9 @@ import sys
 import threading
 import time
 
-from . import catalog
+from . import catalog, tuner
 from .display import Display
-from .engine import FakeEngine, ModHost, ModHostError
+from .engine import FakeEngine, Feedback, ModHost, ModHostError
 from .presets import CHARSET, DEFAULT_PATH, NAME_LEN, SLOTS, PresetStore, label
 from .remote import RemoteHub
 
@@ -71,19 +71,63 @@ class Pedal:
         self.down = [False] * 4
         self.consumed = [False] * 4      # press already used by a hold / mode change
         self.timers = [None] * 4
+        self.readout_seen = False        # Melon Tuner: first reading arrived from mod-host
 
     @property
     def plugin(self):
         return self.plugins[self.idx]
 
+    def layout(self):
+        """The knob pages: 4 controls each, in plugin order.
+
+        Melon Tuner is different: page 1 is the tuner screen (needle), with knob 1 = Mute,
+        and its settings follow on page 2 onwards. "Display" (needle/strobe) is only for
+        the plugin's own window, so it is left out.
+        """
+        controls = list(self.plugin.controls)
+        pages = []
+        if self.plugin.is_tuner:
+            mute = self.plugin.control("mute")
+            pages.append([mute, None, None, None])
+            controls = [c for c in controls if c is not mute and c.short_id != "display"]
+        for i in range(0, len(controls), 4):
+            pages.append((controls[i:i + 4] + [None] * 4)[:4])
+        return pages or [[None] * 4]
+
     @property
     def pages(self):
-        n = len(self.plugin.controls)
-        return max(1, (n + 3) // 4)
+        return len(self.layout())
 
     def page_controls(self):
-        c = self.plugin.controls
-        return [c[i] if i < len(c) else None for i in range(self.page * 4, self.page * 4 + 4)]
+        pages = self.layout()
+        return pages[min(self.page, len(pages) - 1)]
+
+    @property
+    def tuner_visible(self):
+        return self.plugin.is_tuner and self.page == 0 and self.mode == "play"
+
+    def tuner_state(self):
+        """Tuning, reference and mute of the loaded Melon Tuner (for the tuner screen)."""
+        def val(sid, default):
+            c = self.plugin.control(sid)
+            return self.values.get(c.key, default) if c else default
+        idx = int(round(val("tuning", 0)))
+        return {"index": idx, "tuning": tuner.tuning_name(idx), "strings": tuner.string_names(idx),
+                "reference": val("reference", 440.0), "mute": val("mute", 0) >= 0.5}
+
+    def on_patch(self, uri, value):
+        """A value sent by the plugin (mod-host feedback thread)."""
+        with self.lock:
+            if uri != self.plugin.readout or self.engine.loaded is not self.plugin:
+                return
+            if not self.readout_seen:
+                self.readout_seen = True
+                print("tuner: readings arriving from mod-host")
+            if not self.tuner_visible:
+                return
+            st = self.tuner_state()
+            r = tuner.reading(value, st["reference"], st["index"])
+        self.display.tuner(r)
 
     @property
     def edited(self):
@@ -113,6 +157,7 @@ class Pedal:
                 self.values[c.key] = float(values[c.key])
                 self.engine.set(c, self.values[c.key])
         self.page = 0
+        self.readout_seen = False
         if self.bypassed:
             self.engine.bypass(True)
         self.release_knobs()
@@ -366,6 +411,8 @@ def main():
     ap.add_argument("--press-high", action="store_true",
                     help="controller sends 127 when a knob is pressed and 0 when released (NexFoot: the opposite)")
     ap.add_argument("--port", type=int, default=5555, help="mod-host TCP port")
+    ap.add_argument("--feedback-port", type=int, default=0,
+                    help="mod-host feedback port (default: --port + 1, i.e. mod-host -f 5556)")
     ap.add_argument("--presets", default=DEFAULT_PATH, help="preset file")
     ap.add_argument("--list", action="store_true", help="list plugins and their parameters, then exit")
     ap.add_argument("--fake", action="store_true", help="no mod-host: print the commands instead")
@@ -413,6 +460,8 @@ def main():
             hub.start(pedal)
         except OSError as e:
             print(f"! remote API off: {e}")
+    if not args.fake:
+        Feedback(pedal.on_patch, port=args.feedback_port or args.port + 1, verbose=args.verbose).start()
     start = next((i for i, p in enumerate(plugins) if args.plugin.lower() in (p.uri + p.name).lower()), 0)
     print(f"Found {len(plugins)} plugins: " + ", ".join(p.name for p in plugins))
     print(f"{sum(1 for p in store.slots if p)} presets in {args.presets}")
