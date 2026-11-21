@@ -8,7 +8,8 @@
     ./install-melon-plugins.sh            # build + install the missing ones
     sudo systemctl restart melon-pedald
 
-- Build time: a few minutes per plugin once JUCE is built; **Rack** is much longer (NeuralAudio, built with `-j1`).
+- Build time: a few minutes per plugin once JUCE is built.
+- **Melon Rack is excluded from the pedal** (too heavy for the Pi 4). The script never builds it, skips it in release zips, and removes an old `Melon Rack.lv2` from `~/.lv2`. Amp and cab will come later from simpler Melon Plugins (NAM Loader, IR Loader).
 - Rebuild everything after a `git pull`: `./install-melon-plugins.sh --all`.
 - A release zip from GitHub (`Melon-Plugins-<version>-Linux-arm64.zip`) can be installed instead: `./install-melon-plugins.sh --zip <file>`.
 
@@ -18,4 +19,3 @@
 |---|---|---|
 | Multi Delay, Shifter, Simple Gate | Yes (knobs, presets) | — |
 | Tuner | Audio (pass-through / mute) and its settings | The note and cents are not sent to the host, so the LCD and app can't show them yet |
-| Rack | Gate, EQ, levels, cabinet switches | Choosing the NAM/AIDA-X models and IRs: they are file paths in the plugin state, set from the desktop GUI |
