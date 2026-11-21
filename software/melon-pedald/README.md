@@ -1,14 +1,20 @@
-# melon-pedald 0.1 (test version)
+# melon-pedald 0.2 (test version)
 
 Controls one LV2 plugin in mod-host with a Livtra NexFoot (USB MIDI).
 Standard library only - no pip packages needed.
 
-| NexFoot | Turn | Press |
-|---|---|---|
-| A | parameter 1 of the page | bypass on/off |
-| B | parameter 2 | previous page |
-| C | parameter 3 | next page |
-| D | parameter 4 | next plugin |
+| NexFoot | Turn | Press | Hold (0.7 s) |
+|---|---|---|---|
+| A | parameter 1 of the page | bypass on/off | |
+| B | parameter 2 | previous page | |
+| C | parameter 3 | next page | **save preset** |
+| D | parameter 4 | next plugin | **preset / plugin browser** |
+
+**Browser:** turn A = move · press A = back · press B or C = presets / plugins · press D = load.
+**Save:** turn A = cursor · turn B = letter · turn C = slot (24 slots, 4 banks of 6) · press D = save · press A = cancel.
+
+Presets are kept in `~/.config/melon-pedald/presets.json` (change with `--presets`).
+`--preset 3` starts with preset 3. The screen shows **EDITED** when you change a loaded preset.
 
 Knobs "pick up" a parameter once they pass its current value (no jumps);
 the terminal tells you which way to turn.

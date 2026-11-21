@@ -84,6 +84,10 @@ class Screen:
             return ui.boot(self.st)
         if scr == "test":
             return ui.test_pattern(*self.lcd_settings())
+        if scr == "list":
+            return ui.list_screen(self.st)
+        if scr == "save":
+            return ui.save_screen(self.st)
         pop = self.popup if time.monotonic() < self.popup_until or self.fine else None
         return ui.play(self.st, popup=pop, fine=self.fine)
 

@@ -455,3 +455,105 @@ def test_pattern(rotation, invert, bgr):
            font("barlow", 600, 13), SAGE, anchor="ms")
     c.text(W / 2, 102, "Background should be near-black green", font("barlow", 600, 13), SAGE, anchor="ms")
     return c.image()
+
+
+# ---------------------------------------------------------------- lists and save
+
+def top_bar(c, title, right=""):
+    c.rect(0, 24, W, 1, fill=RULE)
+    c.text(8, 17.5, title, font("fredoka", 600, 16), CREAM)
+    if right:
+        c.text(W - 8, 17, right, font("barlow", 700, 13), SAGE, anchor="rs")
+
+
+def footer(c, hints):
+    """hints: [[knob number, text, accent?], ...] -> spread left / centre / right."""
+    c.rect(0, 218, W, 1, fill=RULE)
+    f, fb = font("barlow", 600, 12), font("barlow", 700, 10)
+    n = len(hints)
+    for i, h in enumerate(hints):
+        num, text = str(h[0]), str(h[1])
+        col = LIME if len(h) > 2 and h[2] else SAGE
+        w = 14 + 4 + c.textw(text, f)
+        x = 8 if i == 0 else W - 8 - w if i == n - 1 else (W - w) / 2
+        c.circle(x + 7, 229, 6.25, outline=col, width=1.5)
+        c.center(x + 7, 229, num, fb, col)
+        c.text(x + 18, 233.5, text, f, SAGE)
+
+
+def list_screen(st):
+    L = st.get("list") or {}
+    rows, sel = L.get("rows") or [], int(L.get("selected", 0))
+    c = Canvas()
+    top_bar(c, L.get("title", ""), L.get("right", ""))
+    vis = 6
+    start = max(0, min(sel - 2, len(rows) - vis))
+    fn, fname, fm = font("barlow", 700, 15), font("fredoka", 500, 17), font("barlow", 600, 12)
+    x, rw = 6, W - 6 - 13
+    for i, r in enumerate(rows[start:start + vis]):
+        y = 28 + i * 31
+        on = start + i == sel
+        if on:
+            c.rect(x, y, rw, 29, fill=LIME, r=6)
+        fg = GROUND if on else CREAM
+        sub = "#24412F" if on else SAGE
+        c.text(x + 8, y + 20, str(r.get("n", "")), fn, sub)
+        meta = str(r.get("meta", ""))
+        mark = str(r.get("mark", ""))
+        right = x + rw - (20 if mark else 8)
+        mw = c.textw(meta, fm)
+        if meta:
+            c.text(right, y + 19.5, meta, fm, sub, anchor="rs")
+        name = c.fit(str(r.get("name", "")), fname, right - mw - 10 - (x + 36))
+        c.text(x + 36, y + 20.5, name, fname, (sub if on else DIM) if r.get("empty") else fg)
+        if mark:
+            c.text(x + rw - 8, y + 19.5, mark, fm, GROUND if on else LIME, anchor="rs")
+    if len(rows) > vis:
+        c.rect(W - 9, 28, 3, 184, fill=RULE, r=1.5)
+        th = 184 * vis / len(rows)
+        c.rect(W - 9, 28 + (184 - th) * start / (len(rows) - vis), 3, th, fill="#5E7D69", r=1.5)
+    footer(c, L.get("hints", []))
+    return c.image()
+
+
+def hint_tile(c, x, y, w, h, num, label, value, accent=False):
+    bg, fg = (LIME, GROUND) if accent else (SURFACE, CREAM)
+    c.rect(x, y, w, h, fill=bg, r=8)
+    c.circle(x + 17, y + h / 2, 8, outline=GROUND if accent else LINE, width=2)
+    c.center(x + 17, y + h / 2, str(num), font("barlow", 700, 11), fg)
+    fl, fv = font("barlow", 600, 12), font("barlow", 700, 17)
+    c.text(x + 32, y + h / 2 - 4, c.fit(label, fl, w - 38), fl, "#24412F" if accent else SAGE)
+    c.text(x + 32, y + h / 2 + 14, c.fit(value, fv, w - 38), fv, fg)
+
+
+def save_screen(st):
+    sv = st.get("save") or {}
+    name, cur = str(sv.get("name", "")), int(sv.get("cursor", 0))
+    c = Canvas()
+    top_bar(c, "Save preset", sv.get("plugin", ""))
+    n = max(len(name), 1)
+    bw, gap = 18, 1
+    x0 = (W - (n * (bw + gap) - gap)) / 2
+    fc = font("fredoka", 500, 22)
+    for i, ch in enumerate(name):
+        x = x0 + i * (bw + gap)
+        on = i == cur
+        if on:
+            c.rect(x, 33, bw, 32, fill=LIME, r=3)
+        c.rect(x, 65, bw, 2, fill=LIME if on else LINE)
+        if ch != " ":
+            c.text(x + bw / 2, 58, ch, fc, GROUND if on else CREAM, anchor="ms")
+    wheel = sv.get("wheel") or []
+    if wheel:
+        mid = len(wheel) // 2
+        fs, fb = font("barlow", 600, 16), font("barlow", 700, 21)
+        for i, ch in enumerate(wheel):
+            ch = "␣" if ch == " " else ch
+            on = i == mid
+            c.text(W / 2 + (i - mid) * 22, 93, ch, fb if on else fs, LIME if on else DIM, anchor="ms")
+    tiles = sv.get("tiles") or []
+    gw, gh = (W - 18) / 2, (234 - 104 - 6) / 2
+    for i, t in enumerate(tiles[:4]):
+        hint_tile(c, 6 + (i % 2) * (gw + 6), 104 + (i // 2) * (gh + 6), gw, gh, i + 1,
+                  t.get("label", ""), t.get("value", ""), t.get("accent", False))
+    return c.image()

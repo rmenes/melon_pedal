@@ -6,10 +6,10 @@ Draws the screens from [docs/lcd-gui-design.md](../../docs/lcd-gui-design.md) on
 controller (knobs, mod-host, presets) ──JSON over UDP 127.0.0.1:5600──► melon-display ──SPI──► ST7789
 ```
 
-**Working now:** Play screen (4 tiles in the knob corners, preset band, EDITED chip, header with bank / page dots / MIDI / CPU), bypass state, value pop-up (+ fine adjust), GraphicEQ page (band graph + compact tiles), boot screen, test pattern.
+**Working now:** preset and plugin browser (`screen="list"`), save preset (`screen="save"`), Play screen (4 tiles in the knob corners, preset band, EDITED chip, header with bank / page dots / MIDI / CPU), bypass state, value pop-up (+ fine adjust), GraphicEQ page (band graph + compact tiles), boot screen, test pattern.
 Previews (rendered by `--png`, with a stand-in font): [play](preview/play.png) · [bypass](preview/bypass.png) · [pop-up](preview/popup.png) · [fine](preview/fine.png) · [enum](preview/popup-enum.png) · [GraphicEQ](preview/eq.png) · [boot](preview/boot.png) · [test](preview/test.png)
 
-**Later:** menu, preset and plugin browsers, settings, save preset, tuner, MIDI learn. They're in the design canvas but need controller features first.
+**Later:** menu, settings, tuner, MIDI learn. They're in the design canvas but need controller features first.
 
 ## 1. Install on the Pi
 

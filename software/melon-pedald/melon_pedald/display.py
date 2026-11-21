@@ -25,16 +25,23 @@ class Display:
             pass
 
     # ---- what the pedal calls
-    def page(self, pedal):
-        """Full state: after loading a plugin, changing page or bypass."""
+    def page(self, pedal, popup=False):
+        """Full state: after loading a plugin or preset, changing page or bypass."""
         plugin = pedal.plugin
         self.bands = _bands(plugin.controls)
         controls = pedal.page_controls()
+        preset = pedal.presets.get(pedal.slot) if pedal.slot is not None else None
+        if preset:
+            bank = f"BANK {pedal.slot // 6 + 1}"
+            band = {"number": f"{pedal.slot % 6 + 1:02d}", "name": preset["name"], "edited": pedal.edited}
+            sub = plugin.name
+        else:
+            bank = f"PLUGIN {pedal.idx + 1}/{len(pedal.plugins)}"
+            band = {"number": "--", "name": plugin.name, "edited": False}
+            sub = "not saved · hold C to save"
         msg = {
             "op": "update", "screen": "play", "midi": True,
-            "bank": f"PLUGIN {pedal.idx + 1}/{len(pedal.plugins)}",
-            "preset": {"number": f"{pedal.idx + 1:02d}", "name": plugin.name},
-            "plugin": f"{len(plugin.controls)} parameters",
+            "bank": bank, "preset": band, "plugin": sub,
             "page": pedal.page + 1, "pages": pedal.pages,
             "bypass": pedal.bypassed,
             "params": [self._param(c, pedal.values[c.key]) if c else None for c in controls],
@@ -56,6 +63,41 @@ class Display:
         """Knob k (0-3) changed `control` to `value`."""
         p = self._param(control, value)
         self._send({"op": "param", "index": k, "value": p["value"], "popup": True})
+
+    def browser(self, pedal):
+        from .presets import SLOTS, BANK_SIZE, BANKS
+        if pedal.tab == "presets":
+            rows = []
+            for i in range(SLOTS):
+                p = pedal.presets.get(i)
+                rows.append({"n": f"{i % BANK_SIZE + 1:02d}",
+                             "name": p["name"] if p else "— empty —", "empty": not p,
+                             "meta": (p.get("plugin_name", "").replace("Melon ", "") if p else ""),
+                             "mark": "▶" if i == pedal.slot else ""})
+            lst = {"title": "Presets", "right": f"BANK {pedal.sel // BANK_SIZE + 1} of {BANKS}",
+                   "hints": [["1", "move · back"], ["2", "plugins"], ["4", "push: load", True]]}
+        else:
+            rows = [{"n": f"{i + 1:02d}", "name": pl.name, "meta": f"{len(pl.controls)} params",
+                     "mark": "✓" if i == pedal.idx else ""} for i, pl in enumerate(pedal.plugins)]
+            lst = {"title": "Plugins", "right": f"{len(rows)} installed",
+                   "hints": [["1", "move · back"], ["2", "presets"], ["4", "push: load", True]]}
+        lst.update(rows=rows, selected=pedal.sel)
+        self._send({"op": "update", "screen": "list", "list": lst})
+
+    def save(self, pedal, where):
+        from .presets import CHARSET
+        name, cur = pedal.save_name, pedal.save_cursor
+        ch = name[cur]
+        i = CHARSET.find(ch) if ch in CHARSET else 0
+        wheel = [CHARSET[(i + d) % len(CHARSET)] for d in range(-3, 4)]
+        self._send({"op": "update", "screen": "save", "save": {
+            "name": "".join(name), "cursor": cur, "wheel": wheel, "plugin": pedal.plugin.name,
+            "tiles": [
+                {"label": "cursor · push: cancel", "value": f"◂ {cur + 1}/{len(name)} ▸"},
+                {"label": "turn: character", "value": "space" if ch == " " else ch},
+                {"label": "turn: slot", "value": where},
+                {"label": "push", "value": "Save", "accent": True},
+            ]}})
 
     def bypass(self, on):
         self._send({"op": "update", "bypass": bool(on)})
