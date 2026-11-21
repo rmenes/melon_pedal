@@ -3,7 +3,8 @@
 Footswitch-knobs A-D (play screen):
   turn A-D   -> parameters 1-4 of the current page
   press A    -> bypass on/off
-  press B/C  -> previous / next page
+  press B    -> next page (wraps around)
+  press C    -> previous plugin
   press D    -> next plugin
   hold C     -> save preset
   hold D     -> preset / plugin browser
@@ -231,13 +232,13 @@ class Pedal:
             self.engine.bypass(self.bypassed)
             print(f"*** {'BYPASS' if self.bypassed else 'EFFECT ON'} ***")
             self.display.bypass(self.bypassed)
-        elif k in (1, 2):
-            self.page = (self.page + (1 if k == 2 else -1)) % self.pages
+        elif k == 1:
+            self.page = (self.page + 1) % self.pages
             self.release_knobs()
             self.show_page()
-        elif k == 3:
+        elif k in (2, 3):
             self.slot = None
-            self.load(self.idx + 1)
+            self.load(self.idx + (1 if k == 3 else -1))
 
     # --- browser ---
     def open_browser(self):
@@ -355,6 +356,10 @@ def main():
     ap.add_argument("--midi-port", default="Nexfoot MIDI:1", help="ALSA MIDI port of the controller")
     ap.add_argument("--capture", default="system:capture_1", help="JACK input(s), comma separated")
     ap.add_argument("--playback", default="system:playback_1,system:playback_2", help="JACK outputs")
+    ap.add_argument("--turn-cc", default=",".join(map(str, TURN_CC)),
+                    help="CC numbers of knobs A,B,C,D when turned (check with aseqdump)")
+    ap.add_argument("--press-cc", default=",".join(map(str, PRESS_CC)),
+                    help="CC numbers of knobs A,B,C,D when pressed (check with aseqdump)")
     ap.add_argument("--port", type=int, default=5555, help="mod-host TCP port")
     ap.add_argument("--presets", default=DEFAULT_PATH, help="preset file")
     ap.add_argument("--list", action="store_true", help="list plugins and their parameters, then exit")
@@ -363,6 +368,11 @@ def main():
     ap.add_argument("--no-lcd", action="store_true", help="don't send state to the melon-display service")
     ap.add_argument("-v", "--verbose", action="store_true", help="show every mod-host command")
     args = ap.parse_args()
+    for name, target in (("--turn-cc", TURN_CC), ("--press-cc", PRESS_CC)):
+        nums = [int(x) for x in getattr(args, name[2:].replace("-", "_")).split(",")]
+        if len(nums) != 4:
+            raise SystemExit(f"{name} needs 4 numbers (A,B,C,D)")
+        target[:] = nums
 
     plugins = catalog.scan(args.lv2_dir, args.match)
     if not plugins:
@@ -389,8 +399,8 @@ def main():
     start = next((i for i, p in enumerate(plugins) if args.plugin.lower() in (p.uri + p.name).lower()), 0)
     print(f"Found {len(plugins)} plugins: " + ", ".join(p.name for p in plugins))
     print(f"{sum(1 for p in store.slots if p)} presets in {args.presets}")
-    print("A: turn = param 1, press = bypass | B/C: params 2/3, press = page -/+ | "
-          "D: param 4, press = next plugin | hold C = save | hold D = presets")
+    print(f"press: A = bypass, B = next page, C = previous plugin, D = next plugin | "
+          f"hold C = save, hold D = presets   (press CCs A-D: {PRESS_CC})")
     with pedal.lock:
         if not (args.preset and pedal.load_preset(args.preset - 1)):
             pedal.load(start)
