@@ -15,6 +15,7 @@ Standard library only - no pip packages needed.
 
 If a knob does the wrong thing, check which CC it really sends with
 `aseqdump -p "Nexfoot MIDI:1"` and pass them in A,B,C,D order: `--press-cc 21,25,26,27`, `--turn-cc 57,68,74,89`.
+The NexFoot sends value 0 when a knob is pressed and 127 when it is released; for a controller that does the opposite, add `--press-high`.
 
 Presets are kept in `~/.config/melon-pedald/presets.json` (change with `--presets`).
 `--preset 3` starts with preset 3. The screen shows **EDITED** when you change a loaded preset.

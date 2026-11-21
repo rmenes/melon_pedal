@@ -35,7 +35,8 @@ from .engine import FakeEngine, ModHost, ModHostError
 from .presets import CHARSET, DEFAULT_PATH, NAME_LEN, SLOTS, PresetStore, label
 
 TURN_CC = [57, 68, 74, 89]     # NexFoot A, B, C, D (turn)
-PRESS_CC = [21, 25, 26, 27]    # NexFoot A, B, C, D (press: 127 down, 0 up)
+PRESS_CC = [21, 25, 26, 27]    # NexFoot A, B, C, D (press)
+PRESS_LOW = True               # NexFoot sends 0 when pressed, 127 when released (--press-high: the opposite)
 NAMES = "ABCD"
 PICKUP_WINDOW = 3 / 127        # "close enough" to pick up a parameter
 HOLD_SECONDS = 0.7
@@ -341,9 +342,10 @@ class Pedal:
                 self.turn(TURN_CC.index(cc), value)
             elif cc in PRESS_CC:
                 k = PRESS_CC.index(cc)
-                if value >= 64 and not self.down[k]:
+                pressed = value < 64 if PRESS_LOW else value >= 64
+                if pressed and not self.down[k]:
                     self.press_down(k)
-                elif value < 64 and self.down[k]:
+                elif not pressed and self.down[k]:
                     self.press_up(k)
 
 
@@ -360,6 +362,8 @@ def main():
                     help="CC numbers of knobs A,B,C,D when turned (check with aseqdump)")
     ap.add_argument("--press-cc", default=",".join(map(str, PRESS_CC)),
                     help="CC numbers of knobs A,B,C,D when pressed (check with aseqdump)")
+    ap.add_argument("--press-high", action="store_true",
+                    help="controller sends 127 when a knob is pressed and 0 when released (NexFoot: the opposite)")
     ap.add_argument("--port", type=int, default=5555, help="mod-host TCP port")
     ap.add_argument("--presets", default=DEFAULT_PATH, help="preset file")
     ap.add_argument("--list", action="store_true", help="list plugins and their parameters, then exit")
@@ -373,6 +377,8 @@ def main():
         if len(nums) != 4:
             raise SystemExit(f"{name} needs 4 numbers (A,B,C,D)")
         target[:] = nums
+    global PRESS_LOW
+    PRESS_LOW = not args.press_high
 
     plugins = catalog.scan(args.lv2_dir, args.match)
     if not plugins:
