@@ -57,6 +57,8 @@ install_zip() {
 
 [ -f "$SRC/CMakeLists.txt" ] || die "melon_plugins not found at $SRC (git clone it there or set MELON_PLUGINS_DIR)"
 
+mkdir -p "$DEST"; remove_excluded   # every run (also --list) clears out excluded bundles
+
 if [ "${1:-}" = "--list" ]; then
     for t in $(targets); do
         if installed "$t"; then s="installed"; else s="MISSING"; fi
@@ -65,8 +67,6 @@ if [ "${1:-}" = "--list" ]; then
     for t in $EXCLUDE; do [ -d "$SRC/plugins/$t" ] && printf "%-12s %-24s %s\n" "$t" "$(product "$t")" "excluded"; done
     exit 0
 fi
-
-mkdir -p "$DEST"; remove_excluded
 
 # Which targets to build
 if [ "${1:-}" = "--all" ]; then
