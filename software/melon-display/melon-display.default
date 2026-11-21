@@ -1,0 +1,9 @@
+# Options for melon-display (copied to /etc/default/melon-display on first install).
+# After a change: sudo systemctl restart melon-display
+#
+#   --rotation 90|270     flip the picture if it is upside down
+#   --no-invert           if colours look like a photo negative
+#   --bgr                 if red and blue are swapped
+#   --spi-hz 24000000     lower this if the picture shows noise or stripes
+#   --offset-x N / --offset-y N   if the picture is shifted
+MELON_DISPLAY_ARGS="--rotation 90"

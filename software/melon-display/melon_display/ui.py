@@ -1,0 +1,457 @@
+"""Draws the Melon Pedal LCD screens (docs/lcd-gui-design.md) with Pillow.
+
+All coordinates are real LCD pixels (320x240). Frames are drawn at 2x and
+reduced, which gives anti-aliased arcs, circles and rounded corners.
+"""
+import math
+import os
+
+from PIL import Image, ImageDraw, ImageFont
+
+W, H, S = 320, 240, 2
+
+# Tokens (docs/lcd-gui-design.md §3)
+GROUND, SURFACE, LINE, RIND = "#0D1610", "#172A1F", "#2E4A39", "#1E3A2B"
+CREAM, SAGE, DIM, LIME, AMBER = "#F3ECD6", "#93AC9A", "#7A9582", "#A6E07A", "#FFB547"
+BYPASS_RED, FLESH, IDLE, RULE = "#C8262B", "#FF7B8A", "#3E5C49", "#21392B"
+
+FONT_DIR = os.environ.get("MELON_FONTS", os.path.join(os.path.dirname(__file__), "fonts"))
+FALLBACK = {
+    500: "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed.ttf",
+    600: "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf",
+    700: "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf",
+}
+BARLOW = {500: "BarlowSemiCondensed-Medium.ttf", 600: "BarlowSemiCondensed-SemiBold.ttf",
+          700: "BarlowSemiCondensed-Bold.ttf"}
+FREDOKA = "Fredoka-Variable.ttf"
+
+_fonts = {}
+
+
+def font(family, weight, px):
+    """family 'fredoka' (names) or 'barlow' (numbers, labels); px = LCD pixels."""
+    key = (family, weight, px)
+    if key in _fonts:
+        return _fonts[key]
+    f = None
+    try:
+        if family == "fredoka":
+            f = ImageFont.truetype(os.path.join(FONT_DIR, FREDOKA), px * S)
+            try:
+                axes = f.get_variation_axes()
+                names = [a["name"].decode() if isinstance(a["name"], bytes) else str(a["name"])
+                         for a in axes]
+                f.set_variation_by_axes([weight if "eight" in n else a["default"]
+                                         for n, a in zip(names, axes)])
+            except Exception:
+                pass
+        else:
+            f = ImageFont.truetype(os.path.join(FONT_DIR, BARLOW[weight]), px * S)
+    except OSError:
+        f = ImageFont.truetype(FALLBACK[weight], int(px * S * (0.86 if family == "barlow" else 0.9)))
+    _fonts[key] = f
+    return f
+
+
+class Canvas:
+    """Pillow drawing in 1x LCD coordinates on a 2x image."""
+
+    def __init__(self, bg=GROUND, size=(W, H)):
+        self.im = Image.new("RGB", (size[0] * S, size[1] * S), bg)
+        self.d = ImageDraw.Draw(self.im)
+
+    def rect(self, x, y, w, h, fill=None, r=0, outline=None, width=1):
+        box = [x * S, y * S, (x + w) * S - 1, (y + h) * S - 1]
+        self.d.rounded_rectangle(box, radius=r * S, fill=fill, outline=outline,
+                                 width=int(width * S))
+
+    def circle(self, cx, cy, r, fill=None, outline=None, width=1):
+        self.d.ellipse([(cx - r) * S, (cy - r) * S, (cx + r) * S, (cy + r) * S],
+                       fill=fill, outline=outline, width=int(width * S))
+
+    def arc(self, cx, cy, r, start, end, color, width):
+        """Ring arc with round caps; r = centreline radius; angles clockwise from 3 o'clock."""
+        if end - start < 0.5:
+            return
+        o = r + width / 2
+        self.d.arc([(cx - o) * S, (cy - o) * S, (cx + o) * S, (cy + o) * S],
+                   start, end, fill=color, width=int(width * S))
+        for a in (start, end):
+            t = math.radians(a)
+            self.circle(cx + r * math.cos(t), cy + r * math.sin(t), width / 2, fill=color)
+
+    def text(self, x, y, s, f, fill, anchor="ls", spacing=0):
+        if not spacing:
+            self.d.text((x * S, y * S), s, font=f, fill=fill, anchor=anchor)
+            return
+        w = self.textw(s, f, spacing)
+        if anchor[0] == "m":
+            x -= w / 2
+        elif anchor[0] == "r":
+            x -= w
+        for ch in s:
+            self.d.text((x * S, y * S), ch, font=f, fill=fill, anchor="l" + anchor[1])
+            x += self.d.textlength(ch, font=f) / S + spacing
+
+    def textw(self, s, f, spacing=0):
+        return self.d.textlength(s, font=f) / S + spacing * max(0, len(s) - 1)
+
+    def center(self, cx, cy, s, f, fill):
+        """Centre text on (cx, cy) by its cap height (looks right for digits and capitals)."""
+        top = self.d.textbbox((0, 0), "H", font=f, anchor="ls")[1] / S
+        self.text(cx, cy - top / 2, s, f, fill, anchor="ms")
+
+    def fit(self, s, f, maxw):
+        if self.textw(s, f) <= maxw:
+            return s
+        while s and self.textw(s + "…", f) > maxw:
+            s = s[:-1]
+        return s.rstrip() + "…"
+
+    def image(self):
+        return self.im.reduce(S)
+
+
+# ---------------------------------------------------------------- values
+
+def frac(p):
+    lo, hi, v = float(p.get("min", 0)), float(p.get("max", 1)), float(p.get("value", 0))
+    if hi == lo:
+        return 0.0
+    if p.get("log") and lo > 0 and v > 0:
+        f = math.log(v / lo) / math.log(hi / lo)
+    else:
+        f = (v - lo) / (hi - lo)
+    return max(0.0, min(1.0, f))
+
+
+def num(v, decimals, plus=False):
+    s = f"{abs(v):.{decimals}f}"
+    if v < 0 and float(s) != 0:
+        return "−" + s
+    if plus and v > 0:
+        return "+" + s
+    return s
+
+
+def decimals_for(p, span):
+    if "decimals" in p:
+        return p["decimals"]
+    if p.get("kind") == "int":
+        return 0
+    return 0 if span >= 100 else 1 if span >= 10 else 2
+
+
+def fmt(p, fine=False):
+    """-> (value text, unit text)"""
+    if p.get("text") is not None:
+        return str(p["text"]), p.get("unit", "")
+    kind, v = p.get("kind", "float"), float(p.get("value", 0))
+    if kind == "enum":
+        opts = p.get("options") or ["?"]
+        i = max(0, min(len(opts) - 1, int(round(v))))
+        return str(opts[i]), f"{i + 1}/{len(opts)}"
+    if kind == "toggle":
+        return ("On" if v >= 0.5 else "Off"), ""
+    unit = p.get("unit", "")
+    lo, hi = float(p.get("min", 0)), float(p.get("max", 1))
+    plus = lo < 0 < hi
+    if unit == "Hz" and abs(v) >= 1000:
+        return num(v / 1000, 2 if abs(v) < 10000 and fine else 1, plus), "kHz"
+    d = decimals_for(p, hi - lo) + (1 if fine else 0)
+    return num(v, d, plus), unit
+
+
+def fmt_bound(p, v):
+    q = dict(p, value=v, text=None)
+    t, u = fmt(q)
+    return f"{t} {u}".strip() if u in ("kHz", "Hz") else t
+
+
+# ---------------------------------------------------------------- pieces
+
+def header(c, st):
+    c.rect(0, 20, W, 1, fill=RULE)
+    f = font("barlow", 600, 12)
+    c.text(8, 14.5, st.get("bank", ""), f, SAGE, spacing=0.5)
+    pages, page = int(st.get("pages", 1) or 1), int(st.get("page", 1) or 1)
+    if pages > 1:
+        x = W / 2 - (pages * 6 + (pages - 1) * 4) / 2
+        for i in range(pages):
+            c.circle(x + 3 + i * 10, 10.5, 3, fill=CREAM if i + 1 == page else IDLE)
+    x = W - 8
+    if st.get("cpu") is not None:
+        s = f"CPU {int(round(st['cpu']))}%"
+        c.text(x, 14.5, s, f, AMBER if st["cpu"] >= 80 else SAGE, anchor="rs")
+        x -= c.textw(s, f) + 8
+    if st.get("midi") is not None:
+        c.text(x, 14.5, "MIDI", f, SAGE, anchor="rs")
+        x -= c.textw("MIDI", f) + 3
+        c.circle(x - 2.5, 10.5, 2.5, fill=LIME if st["midi"] else IDLE)
+
+
+def preset_band(c, st, y, h, bypassed):
+    pr = st.get("preset") or {}
+    num_s = str(pr.get("number", ""))
+    by = y + (h - 44) / 2
+    c.rect(8, by, 44, 44, fill=LINE if bypassed else LIME, r=8)
+    c.center(30, by + 22, num_s, font("fredoka", 600, 24), CREAM if bypassed else GROUND)
+    edited = pr.get("edited") and not bypassed
+    maxw = W - 60 - 8 - (52 if edited else 0)
+    f = font("fredoka", 500, 26)
+    c.text(60, by + 22, c.fit(pr.get("name", ""), f, maxw), f, CREAM)
+    if bypassed:
+        sub = st.get("bypass_note", "Dry signal · effect bypassed")
+    else:
+        sub = st.get("plugin", "")
+        if int(st.get("pages", 1) or 1) > 1:
+            sub += f" · page {st.get('page', 1)}/{st.get('pages')}"
+    fs = font("barlow", 500, 13)
+    c.text(60, by + 40, c.fit(sub, fs, W - 68), fs, SAGE)
+    if edited:
+        fe = font("barlow", 700, 11)
+        w = c.textw("EDITED", fe) + 8
+        c.rect(W - 8 - w, by + 2, w, 15, fill=AMBER, r=4)
+        c.text(W - 8 - w / 2, by + 13.5, "EDITED", fe, GROUND, anchor="ms")
+
+
+def knob_ring(c, cx, cy, p, n, color):
+    c.arc(cx, cy, 16, 135, 405, LINE, 4)
+    if p is not None:
+        if p.get("kind") == "enum" and p.get("options"):
+            k = len(p["options"])
+            i = max(0, min(k - 1, int(round(float(p.get("value", 0))))))
+            for j in range(k):
+                a = math.radians(135 + (270 * j / (k - 1) if k > 1 else 135))
+                c.circle(cx + 16 * math.cos(a), cy + 16 * math.sin(a),
+                         3.5 if j == i else 3, fill=color if j == i else IDLE)
+        else:
+            c.arc(cx, cy, 16, 135, 135 + 270 * frac(p), color, 4)
+    c.center(cx, cy, str(n), font("barlow", 700, 13), SAGE)
+
+
+def tile(c, x, y, w, h, p, n, color=LIME):
+    c.rect(x, y, w, h, fill=SURFACE, r=8)
+    knob_ring(c, x + 28, y + h / 2, p, n, color)
+    if p is None:
+        return
+    fl, fv, fu = font("barlow", 600, 12), font("barlow", 600, 24), font("barlow", 500, 13)
+    tx, maxw = x + 56, w - 56 - 6
+    c.text(tx, y + h / 2 - 9, c.fit(str(p.get("label", "")).upper(), fl, maxw), fl, SAGE, spacing=0.6)
+    val, unit = fmt(p)
+    val = c.fit(val, fv, maxw - (c.textw(unit, fu) + 2 if unit else 0))
+    c.text(tx, y + h / 2 + 15, val, fv, CREAM)
+    if unit:
+        c.text(tx + c.textw(val, fv) + 2, y + h / 2 + 15, unit, fu, SAGE)
+
+
+def tiles_grid(c, params, top, bottom, tile_fn=tile):
+    gw = (W - 12 - 6) / 2
+    gh = (bottom - top - 6) / 2
+    for i in range(4):
+        p = params[i] if i < len(params) else None
+        tile_fn(c, 6 + (i % 2) * (gw + 6), top + (i // 2) * (gh + 6), gw, gh, p, i + 1)
+
+
+def compact_tile(c, x, y, w, h, p, n, color=LIME):
+    c.rect(x, y, w, h, fill=SURFACE, r=6)
+    c.circle(x + 17, y + h / 2, 8, outline=LINE, width=2)
+    c.center(x + 17, y + h / 2, str(n), font("barlow", 700, 11), SAGE)
+    if p is None:
+        return
+    fl, fv, fu = font("barlow", 600, 12), font("barlow", 600, 20), font("barlow", 500, 11)
+    val, unit = fmt(p)
+    vw = c.textw(val, fv) + (c.textw(unit, fu) + 1 if unit else 0)
+    c.text(x + w - 8 - vw, y + h / 2 + 7, val, fv, CREAM)
+    if unit:
+        c.text(x + w - 8 - c.textw(unit, fu), y + h / 2 + 7, unit, fu, SAGE)
+    bx, bw = x + 31, w - 31 - vw - 16
+    c.text(bx, y + h / 2 - 3, c.fit(str(p.get("label", "")), fl, bw), fl, SAGE)
+    by = y + h / 2 + 3
+    c.rect(bx, by, bw, 4, fill=LINE, r=2)
+    lo, hi = float(p.get("min", 0)), float(p.get("max", 1))
+    f = frac(p)
+    if lo < 0 < hi:
+        z = (0 - lo) / (hi - lo)
+        a, b = sorted((z, f))
+        if b - a > 0.005:
+            c.rect(bx + bw * a, by, bw * (b - a), 4, fill=color, r=2)
+        c.rect(bx + bw * z - 0.5, by - 2, 1, 8, fill=SAGE)
+    elif f > 0.005:
+        c.rect(bx, by, bw * f, 4, fill=color, r=2)
+
+
+def eq_graph(c, g, y, h=78):
+    vals = g.get("values") or []
+    n = len(vals)
+    if not n:
+        return
+    lo, hi = float(g.get("min", -12)), float(g.get("max", 12))
+    gap = 3 if n > 16 else 4
+    bw = (W - 12 - (n - 1) * gap) / n
+    mid = y + h / 2
+    zero = (0 - lo) / (hi - lo) if lo < 0 < hi else 0
+    base = y + h * (1 - zero)
+    hl = g.get("highlight") or []
+    if len(hl) == 2:
+        x0 = 6 + hl[0] * (bw + gap) - 2
+        c.rect(x0, y, (hl[1] - hl[0] + 1) * (bw + gap) - gap + 4, h, fill="#1F3A2A", r=4)
+    c.rect(6, base, W - 12, 1, fill=LINE)
+    for i, v in enumerate(vals):
+        f = max(0.0, min(1.0, (float(v) - lo) / (hi - lo)))
+        top = y + h * (1 - f)
+        on = len(hl) == 2 and hl[0] <= i <= hl[1]
+        y0, y1 = sorted((top, base))
+        if y1 - y0 < 1:
+            y0, y1 = base - 0.5, base + 0.5
+        c.rect(6 + i * (bw + gap), y0, bw, y1 - y0, fill=LIME if on else IDLE, r=1.5)
+    fl = font("barlow", 600, 11)
+    for i, label in g.get("labels", []):
+        c.text(6 + i * (bw + gap), y + h + 12, str(label), fl, SAGE)
+
+
+# ---------------------------------------------------------------- screens
+
+def play(st, popup=None, fine=False):
+    """Play screen; popup = index of the tile whose value pop-up is shown."""
+    bypassed = bool(st.get("bypass"))
+    params = st.get("params") or []
+    c = Canvas()
+    graph = st.get("graph")
+    if bypassed:
+        c.rect(0, 0, W, 26, fill=BYPASS_RED)
+        c.text(W / 2, 19.5, "BYPASS", font("barlow", 700, 18), "#FFFFFF", anchor="ms", spacing=3)
+        preset_band(c, st, 26, 52, True)
+        top = 78
+    elif graph:
+        header(c, st)
+        pr = st.get("preset") or {}
+        ff = font("fredoka", 600, 18)
+        c.text(8, 40, str(pr.get("number", "")), ff, LIME)
+        nx = 8 + c.textw(str(pr.get("number", "")), ff) + 6
+        sub = st.get("graph_note", st.get("plugin", ""))
+        fs = font("barlow", 600, 12)
+        c.text(W - 8, 40, sub, fs, SAGE, anchor="rs")
+        fn = font("fredoka", 500, 18)
+        c.text(nx, 40, c.fit(pr.get("name", ""), fn, W - 8 - c.textw(sub, fs) - 8 - nx), fn, CREAM)
+        eq_graph(c, graph, 48)
+        tiles_grid(c, params, 140, 234, compact_tile)
+        top = None
+    else:
+        header(c, st)
+        preset_band(c, st, 21, 56, False)
+        top = 77
+    if top is not None:
+        if bypassed:
+            layer = Canvas()
+            tiles_grid(layer, params, top, 234, lambda *a: tile(*a, color=SAGE))
+            box = (0, top * S, W * S, H * S)
+            region = Image.blend(Image.new("RGB", (W * S, (H - top) * S), GROUND),
+                                 layer.im.crop(box), 0.45)
+            c.im.paste(region, box[:2])
+        else:
+            tiles_grid(c, params, top, 234)
+    if popup is not None and popup < len(params) and params[popup] is not None:
+        value_popup(c, params[popup], popup + 1, fine)
+    return c.image()
+
+
+def value_popup(c, p, n, fine):
+    c.im.paste(Image.blend(c.im, Image.new("RGB", c.im.size, GROUND), 0.78))
+    x, y, w, h = 10, 30, 300, 180
+    c.rect(x, y, w, h, fill=SURFACE, r=12, outline=LIME, width=2)
+    c.circle(x + 26, y + 22, 9, outline=LIME, width=2)
+    c.center(x + 26, y + 22, str(n), font("barlow", 700, 12), LIME)
+    c.text(x + 42, y + 28, str(p.get("label", "")).upper(), font("barlow", 700, 16), SAGE, spacing=1.2)
+    if fine:
+        fc = font("barlow", 700, 12)
+        cw = c.textw("FINE ×10", fc) + 12
+        c.rect(x + w - 14 - cw, y + 13, cw, 17, fill=AMBER, r=4)
+        c.text(x + w - 14 - cw / 2, y + 25.5, "FINE ×10", fc, GROUND, anchor="ms")
+    val, unit = fmt(p, fine)
+    fv, fu = font("barlow", 700, 68), font("barlow", 600, 26)
+    total = c.textw(val, fv) + (c.textw(unit, fu) + 4 if unit else 0)
+    if total > w - 28:
+        fv = font("barlow", 700, 48)
+        total = c.textw(val, fv) + (c.textw(unit, fu) + 4 if unit else 0)
+    vx = x + (w - total) / 2
+    c.text(vx, y + 112, val, fv, CREAM)
+    if unit:
+        c.text(vx + c.textw(val, fv) + 4, y + 112, unit, fu, SAGE)
+    bx, bw, by = x + 14, w - 28, y + 132
+    fl = font("barlow", 600, 12)
+    kind = p.get("kind", "float")
+    if kind in ("enum", "toggle"):
+        opts = p.get("options") if kind == "enum" else ["Off", "On"]
+        if opts:
+            k = len(opts)
+            i = max(0, min(k - 1, int(round(float(p.get("value", 0))))))
+            sw = (bw - (k - 1) * 4) / k
+            for j, o in enumerate(opts):
+                c.rect(bx + j * (sw + 4), by, sw, 22, fill=LIME if j == i else LINE, r=5)
+                c.text(bx + j * (sw + 4) + sw / 2, by + 15.5, c.fit(str(o), fl, sw - 4), fl,
+                       GROUND if j == i else SAGE, anchor="ms")
+        return
+    lo, hi = float(p.get("min", 0)), float(p.get("max", 1))
+    if not fine:
+        c.rect(bx, by, bw, 10, fill=LINE, r=5)
+        f = frac(p)
+        if f > 0.01:
+            c.rect(bx, by, max(10, bw * f), 10, fill=LIME, r=5)
+        if p.get("default") is not None:
+            df = frac(dict(p, value=p["default"]))
+            c.rect(bx + bw * df - 1, by - 4, 2, 18, fill=CREAM)
+            c.text(x + w / 2, by + 30, "default " + fmt_bound(p, float(p["default"])), fl, SAGE, anchor="ms")
+        c.text(bx, by + 30, fmt_bound(p, lo), fl, SAGE)
+        c.text(bx + bw, by + 30, fmt_bound(p, hi), fl, SAGE, anchor="rs")
+    else:
+        v = float(p.get("value", 0))
+        win = (hi - lo) / 25
+        a = max(lo, min(hi - win, v - win / 2))
+        for t in range(21):
+            th = 14 if t % 5 == 0 else 7
+            c.rect(bx + bw * t / 20 - 0.5, by + 18 - th, 1, th, fill="#5E7D69")
+        mx = bx + bw * (v - a) / win
+        c.rect(mx - 1.5, by, 3, 18, fill=AMBER, r=1.5)
+        c.text(bx, by + 32, fmt_bound(p, a), fl, SAGE)
+        c.text(bx + bw, by + 32, fmt_bound(p, a + win), fl, SAGE, anchor="rs")
+
+
+def boot(st):
+    c = Canvas(bg=RIND)
+    # melon slice logo + wordmark
+    fw = font("fredoka", 600, 46)
+    lx, ly = (W - (60 + c.textw("melon", fw))) / 2, 24
+    c.d.chord([(lx) * S, (ly - 26) * S, (lx + 52) * S, (ly + 26) * S], 0, 180, fill=LIME)
+    c.d.chord([(lx + 4) * S, (ly - 22) * S, (lx + 48) * S, (ly + 22) * S], 0, 180, fill=FLESH)
+    for sx, sy in ((lx + 17, ly + 8), (lx + 26, ly + 13), (lx + 35, ly + 8)):
+        c.d.ellipse([(sx - 1.4) * S, (sy - 2.1) * S, (sx + 1.4) * S, (sy + 2.1) * S], fill=RIND)
+    c.text(lx + 60, 58, "melon", fw, CREAM)
+    c.text(W / 2, 80, "EFFECTS PEDAL", font("barlow", 600, 13), "#B9CDBE", anchor="ms", spacing=4)
+    f = font("barlow", 600, 14)
+    y = 112
+    for label, status in (st.get("boot") or {}).get("steps", []):
+        col = "#B9CDBE" if status == "pending" else CREAM
+        c.text(50, y, label, f, col)
+        mark, mc = {"ok": ("✓", LIME), "wait": ("…", CREAM), "fail": ("✗", AMBER)}.get(status, ("·", "#B9CDBE"))
+        c.text(270, y, mark, f, mc, anchor="rs")
+        y += 20
+    note = (st.get("boot") or {}).get("note", "Dry signal passes while the pedal starts")
+    c.text(W / 2, 228, note, font("barlow", 600, 12), "#B9CDBE", anchor="ms")
+    return c.image()
+
+
+def test_pattern(rotation, invert, bgr):
+    """Colour bars + orientation arrow, for setting --rotation / --invert / --bgr."""
+    c = Canvas()
+    bars = (("#FF0000", "RED"), ("#00FF00", "GREEN"), ("#0000FF", "BLUE"), ("#FFFFFF", "WHITE"))
+    bw = W / 4
+    for i, (col, name) in enumerate(bars):
+        c.rect(i * bw, 120, bw, 120, fill=col)
+        c.text(i * bw + bw / 2, 230, name, font("barlow", 700, 14), "#000000" if name in ("GREEN", "WHITE") else "#FFFFFF", anchor="ms")
+    c.d.polygon([(W / 2 * S, 8 * S), ((W / 2 - 18) * S, 34 * S), ((W / 2 + 18) * S, 34 * S)], fill=LIME)
+    c.text(W / 2, 54, "TOP (back edge)", font("barlow", 700, 16), CREAM, anchor="ms")
+    c.text(W / 2, 80, f"rotation {rotation} · invert {'on' if invert else 'off'} · bgr {'on' if bgr else 'off'}",
+           font("barlow", 600, 13), SAGE, anchor="ms")
+    c.text(W / 2, 102, "Background should be near-black green", font("barlow", 600, 13), SAGE, anchor="ms")
+    return c.image()

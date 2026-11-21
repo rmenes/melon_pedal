@@ -1,0 +1,4 @@
+# Keep Linux line endings: install.sh and the service file run on the Pi
+* text=auto eol=lf
+*.ttf binary
+*.png binary

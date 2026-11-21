@@ -1,0 +1,19 @@
+[Unit]
+Description=Melon Pedal LCD GUI (ST7789)
+After=local-fs.target
+
+[Service]
+User=__USER__
+SupplementaryGroups=spi gpio
+EnvironmentFile=-/etc/default/melon-display
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=/opt/melon-display
+ExecStart=/usr/bin/python3 -m melon_display $MELON_DISPLAY_ARGS
+Restart=always
+RestartSec=2
+# Keep the GUI off the audio cores (software architecture §3.1) and below audio priority
+CPUAffinity=0 1
+Nice=5
+
+[Install]
+WantedBy=multi-user.target
