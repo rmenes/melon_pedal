@@ -18,7 +18,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -46,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.melonaudio.pedal.data.ControlDef
 import com.melonaudio.pedal.data.Kind
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
@@ -61,6 +77,8 @@ fun ControlCard(
     onChange: (Float) -> Unit,
     onReset: () -> Unit,
 ) {
+    val typable = def.kind == Kind.FLOAT || def.kind == Kind.INT
+    var typing by remember { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxWidth()
@@ -84,7 +102,25 @@ fun ControlCard(
                 def.label, color = Melon.sage, fontSize = 14.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
             )
-            Text(def.format(value), color = Melon.lime, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            if (typable) {
+                // tap the value to type an exact number
+                Text(
+                    def.format(value), color = Melon.lime, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .border(1.dp, Melon.line, RoundedCornerShape(4.dp))
+                        .clickable { typing = true }
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                )
+            } else {
+                Text(def.format(value), color = Melon.lime, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        if (typing) {
+            ValueEntryDialog(def, value, onDismiss = { typing = false }) { v ->
+                onChange(v)
+                typing = false
+            }
         }
 
         when (def.kind) {
@@ -143,6 +179,75 @@ fun ControlCard(
             }
         }
     }
+}
+
+/** Number without unit, as typed: "-7", "440", "0.25" (no thousands separator, "." decimals). */
+private fun plain(def: ControlDef, v: Float): String {
+    val t = if (def.kind == Kind.INT) String.format(Locale.US, "%.0f", v)
+    else String.format(Locale.US, "%.4f", v).trimEnd('0').trimEnd('.')
+    return if (t == "-0") "0" else t
+}
+
+/** Dialog to type an exact value; accepts "," or "." as decimal mark. */
+@Composable
+private fun ValueEntryDialog(def: ControlDef, value: Float, onDismiss: () -> Unit, onSet: (Float) -> Unit) {
+    val start = plain(def, value)
+    var field by remember { mutableStateOf(TextFieldValue(start, selection = TextRange(0, start.length))) }
+    val lo = minOf(def.min, def.max)
+    val hi = maxOf(def.min, def.max)
+    val parsed = field.text.trim().replace(',', '.').toFloatOrNull()
+    val error = when {
+        field.text.isBlank() -> null
+        parsed == null -> "Type a number"
+        parsed < lo - 1e-6f || parsed > hi + 1e-6f -> "Must be between ${plain(def, lo)} and ${plain(def, hi)}"
+        else -> null
+    }
+    val ok = parsed != null && error == null
+    fun submit() {
+        if (!ok) return
+        val v = parsed!!.coerceIn(lo, hi)
+        onSet(if (def.kind == Kind.INT) v.roundToInt().toFloat() else v)
+    }
+    val focus = remember { FocusRequester() }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Melon.surface,
+        title = { Text(def.label, color = Melon.cream) },
+        text = {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = field,
+                        onValueChange = { field = it },
+                        singleLine = true,
+                        isError = error != null,
+                        suffix = { if (def.unit.isNotEmpty()) Text(def.unit) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                        modifier = Modifier.weight(1f).focusRequester(focus),
+                    )
+                    if (lo < 0f) {
+                        // many number keyboards have no minus key
+                        TextButton(onClick = {
+                            val t = field.text.trim()
+                            val n = if (t.startsWith("-")) t.drop(1) else "-$t"
+                            field = TextFieldValue(n, selection = TextRange(n.length))
+                        }) { Text("±", fontSize = 22.sp, color = Melon.lime) }
+                    }
+                }
+                LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }   // open the keyboard
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Range ${plain(def, lo)} to ${plain(def, hi)} ${def.unit}".trim() + " · now ${def.format(value)}",
+                    color = Melon.sage, fontSize = 12.sp,
+                )
+                if (error != null) Text(error, color = Melon.amber, fontSize = 12.sp)
+            }
+        },
+        confirmButton = { Button(onClick = { submit() }, enabled = ok) { Text("Set") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 /** GraphicEQ-style band graph; the bands on the pedal's knobs are highlighted. */

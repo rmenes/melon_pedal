@@ -7,6 +7,7 @@ Edits the pedal over Bluetooth LE through `software/melon-ble`. Kotlin + Jetpack
 - **Sound:** every parameter of the loaded plugin, grouped in pages of four like the pedal. The page that is
   on the physical knobs is outlined and shows knob numbers 1–4; "put on knobs" moves the pedal to another page.
   Sliders (log scale where the plugin says so), switches for toggles, chips or a menu for lists.
+  **Tap the value** to type an exact number ("," or "." as decimal mark, ± button for negative values).
   Double-tap a parameter's name to reset it to the default. GraphicEQ-style plugins also get a band graph.
 - **Presets:** 4 banks × 6 slots, tap to load, *Save current sound…* (name up to 16 characters, pick the slot).
 - **Plugins:** tap to load another plugin.
