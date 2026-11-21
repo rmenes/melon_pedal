@@ -411,31 +411,48 @@ def main():
         if not (args.preset and pedal.load_preset(args.preset - 1)):
             pedal.load(start)
 
-    proc = None
-    try:
-        if args.stdin:
-            source = sys.stdin
-        else:
+    proc = [None]
+
+    def midi_lines():
+        """aseqdump lines; waits (keeping the plugin loaded) while the controller is missing."""
+        waiting = False
+        while True:
             cmd = ["aseqdump", "-p", args.midi_port]
             if shutil.which("stdbuf"):
                 cmd = ["stdbuf", "-oL"] + cmd  # line-buffered, so knob moves arrive at once
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                    stderr=subprocess.STDOUT, text=True, bufsize=1)
-            source = proc.stdout
+            proc[0] = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT, text=True, bufsize=1)
+            connected = False
+            for line in proc[0].stdout:
+                if "Invalid port" in line or "Cannot connect" in line:
+                    break
+                if not connected:
+                    connected = True
+                    if waiting:
+                        print(f"MIDI: {args.midi_port} connected")
+                    waiting = False
+                    display.midi(True)
+                yield line
+            proc[0].wait()
+            if not waiting:
+                print(f"MIDI: waiting for {args.midi_port} (plug in / switch on the controller; "
+                      f"`aconnect -l` lists the ports)")
+                waiting = True
+                display.midi(False)
+            time.sleep(2)
+
+    try:
+        source = sys.stdin if args.stdin else midi_lines()
         for line in source:
-            if proc and ("Invalid port" in line or "Cannot connect" in line):
-                raise SystemExit(f"MIDI: {line.strip()} - check `aconnect -l` and use --midi-port")
             pedal.midi(line)
-        if proc:
-            print("MIDI input ended (controller unplugged?)")
     except KeyboardInterrupt:
         print()
     except ModHostError as e:
         print(f"! {e}")
     finally:
         display.stopped()
-        if proc:
-            proc.terminate()
+        if proc[0]:
+            proc[0].terminate()
         try:
             engine.unload()
         except Exception:

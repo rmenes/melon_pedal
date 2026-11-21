@@ -40,7 +40,7 @@ class Display:
             band = {"number": "--", "name": plugin.name, "edited": False}
             sub = "not saved · hold C to save"
         msg = {
-            "op": "update", "screen": "play", "midi": True,
+            "op": "update", "screen": "play", "midi": getattr(self, "midi_ok", True),
             "bank": bank, "preset": band, "plugin": sub,
             "page": pedal.page + 1, "pages": pedal.pages,
             "bypass": pedal.bypassed,
@@ -98,6 +98,10 @@ class Display:
                 {"label": "turn: slot", "value": where},
                 {"label": "push", "value": "Save", "accent": True},
             ]}})
+
+    def midi(self, connected):
+        self.midi_ok = connected
+        self._send({"op": "update", "midi": bool(connected)})
 
     def bypass(self, on):
         self._send({"op": "update", "bypass": bool(on)})
