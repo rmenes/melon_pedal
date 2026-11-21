@@ -21,6 +21,7 @@ class ModHost:
         self.verbose = verbose
         self.sock = None
         self.loaded = None
+        self.lock = threading.Lock()     # the feedback thread also sends commands
 
     def connect(self, retries=10):
         for i in range(retries):
@@ -33,6 +34,10 @@ class ModHost:
             f"cannot reach mod-host on {self.addr[0]}:{self.addr[1]} - is it running? (mod-host -n -p {self.addr[1]})")
 
     def cmd(self, text):
+        with self.lock:
+            return self._cmd(text)
+
+    def _cmd(self, text):
         if self.verbose:
             print(f"  > {text}")
         self.sock.sendall(text.encode() + b"\0")
@@ -95,11 +100,16 @@ class Feedback:
     Used for values the plugin sends to the host, e.g. Melon Tuner's reading:
     "patch_set <instance> <parameter URI> <type> <value>" (older mod-host: no type).
     Reconnects by itself when mod-host restarts. `on_patch(uri, value)` runs in this thread.
+
+    Flow control: after each batch mod-host sends "data_finish" and then waits for
+    "output_data_ready" on the command port before it sends the next batch (as mod-ui does).
+    `ready()` sends that command.
     """
 
-    def __init__(self, on_patch, host="127.0.0.1", port=5556, verbose=False):
+    def __init__(self, on_patch, ready, host="127.0.0.1", port=5556, verbose=False):
         self.addr = (host, port)
         self.on_patch = on_patch
+        self.ready = ready
         self.verbose = verbose
         self.connected = False
 
@@ -114,6 +124,7 @@ class Feedback:
                     sock.settimeout(None)
                     self.connected, warned = True, False
                     print(f"mod-host feedback connected ({self.addr[1]})")
+                    self._ready()
                     buf = b""
                     while True:
                         chunk = sock.recv(4096)
@@ -130,7 +141,19 @@ class Feedback:
             self.connected = False
             time.sleep(1)
 
+    def _ready(self):
+        try:
+            code = self.ready()
+        except Exception as e:
+            print(f"! output_data_ready: {e!r}")
+            return
+        if isinstance(code, int) and code < 0 and not getattr(self, "_ready_warned", False):
+            self._ready_warned = True
+            print(f"! mod-host refused output_data_ready (error {code}): plugin values will stop after the first one")
+
     def _message(self, text):
+        if text == "data_finish":
+            return self._ready()
         parts = text.split()
         if self.verbose and parts and parts[0] != "patch_set":
             print(f"  [feedback] {text}")

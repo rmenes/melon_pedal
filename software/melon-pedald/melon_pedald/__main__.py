@@ -461,7 +461,8 @@ def main():
         except OSError as e:
             print(f"! remote API off: {e}")
     if not args.fake:
-        Feedback(pedal.on_patch, port=args.feedback_port or args.port + 1, verbose=args.verbose).start()
+        Feedback(pedal.on_patch, lambda: engine.cmd("output_data_ready"),
+                 port=args.feedback_port or args.port + 1, verbose=args.verbose).start()
     start = next((i for i, p in enumerate(plugins) if args.plugin.lower() in (p.uri + p.name).lower()), 0)
     print(f"Found {len(plugins)} plugins: " + ", ".join(p.name for p in plugins))
     print(f"{sum(1 for p in store.slots if p)} presets in {args.presets}")
