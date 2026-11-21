@@ -51,3 +51,12 @@ The pedal state goes to the `melon-display` service (`software/melon-display`), 
 the 2" screen: plugin, page, the 4 knob parameters, value pop-up when a knob moves, BYPASS bar,
 GraphicEQ band graph. Install that service once; then just run the controller as usual.
 `--no-lcd` turns this off. If the display service isn't running, the controller works as before.
+
+## Remote API (phone app over Bluetooth)
+
+The controller listens on **127.0.0.1:5601** (local only) for apps: one JSON object per line.
+The Bluetooth bridge `software/melon-ble` forwards the phone's lines to it; the web UI can use the same API later.
+Every LCD update also goes to the connected apps, so knob turns show up on the phone and phone edits show
+up on the LCD (with the value pop-up). After a phone changes a parameter on the current page, that knob
+has to "pick up" the new value again. Protocol: top of `melon_pedald/remote.py`.
+`--remote-port 0` turns it off. Test it on the Pi without a phone: `python3 ~/melon-ble/melon_remote_cli.py`.

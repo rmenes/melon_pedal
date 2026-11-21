@@ -53,9 +53,10 @@ class ModHost:
 
     # --- plugin ---
     def load(self, plugin, capture, playback):
-        if self.loaded:
-            self.cmd(f"remove {INSTANCE}")
-            self.loaded = None
+        # Always clear instance 0 first, even if we didn't load it: a controller killed by a
+        # restart leaves its plugin in mod-host, and "add" would then fail with -2 (already exists).
+        self.cmd(f"remove {INSTANCE}")      # -3 (no such instance) is fine
+        self.loaded = None
         code = self.cmd(f"add {plugin.uri} {INSTANCE}")
         if code < 0:
             raise ModHostError(f"mod-host could not load {plugin.name} (error {code})")

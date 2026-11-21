@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- melon slice: lime rind, pink flesh, dark seeds -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#A6E07A" android:pathData="M22,40 A32,32 0 0,0 86,40 Z" />
+    <path android:fillColor="#F3ECD6" android:pathData="M26,40 A28,28 0 0,0 82,40 Z" />
+    <path android:fillColor="#FF7B8A" android:pathData="M29,40 A25,25 0 0,0 79,40 Z" />
+    <path android:fillColor="#0D1610" android:pathData="M40,47 l2,5 l2,-5 z M52,50 l2,5 l2,-5 z M64,47 l2,5 l2,-5 z M46,56 l2,5 l2,-5 z M58,56 l2,5 l2,-5 z" />
+</vector>

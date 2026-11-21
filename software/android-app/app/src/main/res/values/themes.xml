@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.MelonPedal" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/melon_ground</item>
+        <item name="android:statusBarColor">@color/melon_ground</item>
+        <item name="android:navigationBarColor">@color/melon_ground</item>
+    </style>
+</resources>

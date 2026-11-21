@@ -1,4 +1,4 @@
-"""melon-pedald, test version 0.2: Livtra NexFoot + mod-host + presets.
+"""melon-pedald, test version 0.3: Livtra NexFoot + mod-host + presets + remote API (Bluetooth app).
 
 Footswitch-knobs A-D (play screen):
   turn A-D   -> parameters 1-4 of the current page
@@ -33,6 +33,7 @@ from . import catalog
 from .display import Display
 from .engine import FakeEngine, ModHost, ModHostError
 from .presets import CHARSET, DEFAULT_PATH, NAME_LEN, SLOTS, PresetStore, label
+from .remote import RemoteHub
 
 TURN_CC = [57, 68, 74, 89]     # NexFoot A, B, C, D (turn)
 PRESS_CC = [21, 25, 26, 27]    # NexFoot A, B, C, D (press)
@@ -370,6 +371,8 @@ def main():
     ap.add_argument("--fake", action="store_true", help="no mod-host: print the commands instead")
     ap.add_argument("--stdin", action="store_true", help="read aseqdump-style lines from stdin instead of MIDI")
     ap.add_argument("--no-lcd", action="store_true", help="don't send state to the melon-display service")
+    ap.add_argument("--remote-port", type=int, default=5601,
+                    help="local TCP port of the remote API used by melon-ble / apps (0 = off)")
     ap.add_argument("-v", "--verbose", action="store_true", help="show every mod-host command")
     args = ap.parse_args()
     for name, target in (("--turn-cc", TURN_CC), ("--press-cc", PRESS_CC)):
@@ -400,8 +403,16 @@ def main():
         raise SystemExit(str(e))
 
     display = Display(enabled=not args.no_lcd)
+    hub = RemoteHub(port=args.remote_port) if args.remote_port else None
+    if hub:
+        display = hub.wrap(display)      # LCD updates also go to the apps
     store = PresetStore(args.presets)
     pedal = Pedal(engine, plugins, args.capture.split(","), args.playback.split(","), display, store)
+    if hub:
+        try:
+            hub.start(pedal)
+        except OSError as e:
+            print(f"! remote API off: {e}")
     start = next((i for i, p in enumerate(plugins) if args.plugin.lower() in (p.uri + p.name).lower()), 0)
     print(f"Found {len(plugins)} plugins: " + ", ".join(p.name for p in plugins))
     print(f"{sum(1 for p in store.slots if p)} presets in {args.presets}")
