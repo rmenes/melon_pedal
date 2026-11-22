@@ -1,0 +1,7 @@
+[
+  { "uri": "melon-nam", "label": "Boss standard", "params": { "model_index": "NAM:Bench/BossWN-standard.nam" }, "settle": 5 },
+  { "uri": "melon-nam", "label": "Boss a2",       "params": { "model_index": "NAM:Bench/BossWN-a2.nam" },       "settle": 5 },
+  { "uri": "melon-nam", "label": "Boss feather",  "params": { "model_index": "NAM:Bench/BossWN-feather.nam" },  "settle": 5 },
+  { "uri": "melon-nam", "label": "Boss nano",     "params": { "model_index": "NAM:Bench/BossWN-nano.nam" },     "settle": 5 },
+  { "uri": "melon-nam", "label": "Jcm800",        "params": { "model_index": "NAM:Amps+Cabs/Jcm800.nam" },      "settle": 5 }
+]

@@ -1,0 +1,6 @@
+[
+  { "uri": "melon-graphiceq", "label": "10 bands", "params": { "mode": 0 } },
+  { "uri": "melon-graphiceq", "label": "31 bands", "params": { "mode": 1 } },
+  { "uri": "melon-nam", "label": "Jcm800", "params": { "model_index": "NAM:Amps+Cabs/Jcm800.nam" }, "settle": 5 },
+  { "uri": "melon-cab", "label": "OLA CON -3 B", "params": { "ir_index": "IR:Ola Englund - Impulse Pack/OLA CON -3 B.wav" }, "settle": 3 }
+]

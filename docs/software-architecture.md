@@ -2,6 +2,7 @@
 
 **v0.2 (2026-11-17):** controller in Python confirmed · Melon Plugins stay on **JUCE**; added the JUCE-on-ARM plan (§7) and support for LV2 *parameters* (JUCE style) next to control ports.
 **2026-11-20:** §5 knob order fixed to match the hardware layout (K1/K2 on top); full LCD design in [lcd-gui-design.md](lcd-gui-design.md).
+**2026-11-22:** measured multi-FX DSP budget in [dsp-budget.md](dsp-budget.md) (§3.5). The running pedal uses JACK 256 × 3 on the Momix interface and the services `melon-jack`, `melon-modhost`, `melon-pedald`, `melon-display`, `melon-ble` (§8).
 
 Goal for the first version: **one LV2 plugin loaded at a time**, controlled from the pedal (4 encoders, footswitch, 2" LCD), from MIDI, and from a web page over Wi-Fi. Runs on **Raspberry Pi OS Lite (64-bit)** on the Raspberry Pi 4.
 
@@ -88,7 +89,7 @@ Expected swap time: 0.2–1 s, depending on the plugin.
 Input mode *Auto* treats IN R as absent when it is silent (a mono plug grounds the ring).
 
 ### 3.5 CPU budget
-The Pi 4 has four cores. One plugin at 48 kHz / 128 frames leaves plenty of headroom for typical effects. The JACK DSP load and xrun count appear on the LCD header and the web UI, which tells us early if a heavy plugin (e.g. amp modelling) needs a bigger buffer. Several plugins in a chain can come later.
+Measured on 2026-11-22 (details: [dsp-budget.md](dsp-budget.md)): at 48 kHz / 256 frames a serial chain runs on one core and costs about **1.1 × the sum** of each plugin's own cost. Most Melon Plugins cost 1–5 %; Muffs 26 %, Reverberare 16 %, Comp 8 %; Melon NAM **41 % at Model Size Full, 9 % at Light**. A 7-block rig (gate, comp, drive, NAM, cab, delay, reverb) measured **85 %** with NAM Full (at the limit) and is estimated at **≈ 50 %** with NAM Light. The JACK DSP load and xrun count appear on the LCD header and the web UI; the multi-FX engine will check a measured cost table before adding a block (rules in the DSP budget doc).
 
 ---
 
@@ -182,7 +183,7 @@ Melon Plugins keep using **JUCE**: one codebase gives VST3 on Windows and LV2 on
 - Raspberry Pi OS Lite 64-bit on the USB drive. Hostname `melon`, SSH on.
 - `config.txt`: `dtoverlay=hifiberry-dacplusadcpro`, `dtparam=audio=off`, `dtoverlay=uart3`, `dtparam=spi=on`, `dtparam=i2c_arm=on`, four `rotary-encoder` overlays, `enable_uart=0`, HDMI off.
 - Partitions: boot · root (read-only overlay in normal use) · `/data` (ext4, writable).
-- Services: `jackd.service`, `mod-host.service`, `melon-pedald.service`, all with automatic restart. A watchdog puts the relays in bypass if `melon-pedald` stops.
+- Services (as built, 2026-11-22): `melon-jack`, `melon-modhost`, `melon-pedald`, `melon-display` (LCD), `melon-ble` (phone app), all with automatic restart. Restarting `melon-modhost` also restarts `melon-pedald`. mod-host accepts one command client at a time, so everything goes through `melon-pedald`. A watchdog puts the relays in bypass if `melon-pedald` stops.
 - Updates: switch root to writable, `git pull` / install packages, switch back (one button in the web UI).
 
 ## 9. Repository layout (planned)

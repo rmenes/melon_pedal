@@ -1,0 +1,6 @@
+[
+  { "uri": "melon-nam", "label": "Jcm800 Full",  "params": { "size": 0, "model_index": "NAM:Amps+Cabs/Jcm800.nam" }, "settle": 5 },
+  { "uri": "melon-nam", "label": "Jcm800 Light", "params": { "size": 1, "model_index": "NAM:Amps+Cabs/Jcm800.nam" }, "settle": 5 },
+  { "uri": "melon-nam", "label": "TS9 Full",     "params": { "size": 0, "model_index": "NAM:pedals/Fortin_TS9_1.nam" }, "settle": 5 },
+  { "uri": "melon-nam", "label": "TS9 Light",    "params": { "size": 1, "model_index": "NAM:pedals/Fortin_TS9_1.nam" }, "settle": 5 }
+]
