@@ -180,9 +180,10 @@ def header(c, st):
         for i in range(pages):
             c.circle(x + 3 + i * 10, 10.5, 3, fill=CREAM if i + 1 == page else IDLE)
     x = W - 8
-    if st.get("cpu") is not None:
-        s = f"CPU {int(round(st['cpu']))}%"
-        c.text(x, 14.5, s, f, AMBER if st["cpu"] >= 80 else SAGE, anchor="rs")
+    if st.get("cpu") is not None:                  # DSP load (% of the JACK period), docs/dsp-budget.md §6
+        s = f"DSP {int(round(st['cpu']))}%"
+        col = BYPASS_RED if st["cpu"] >= 85 else AMBER if st["cpu"] >= 60 else SAGE
+        c.text(x, 14.5, s, f, col, anchor="rs")
         x -= c.textw(s, f) + 8
     if st.get("midi") is not None:
         c.text(x, 14.5, "MIDI", f, SAGE, anchor="rs")
@@ -333,6 +334,34 @@ def eq_graph(c, g, y, h=78):
         c.text(6 + i * (bw + gap), y + h + 12, str(label), fl, SAGE)
 
 
+def chain_strip(c, chain, y, h, bypassed=False):
+    """Multi-FX chain: one chip per block, in signal order (docs/multifx-design.md §4).
+
+    on = lime tag on a green chip · off = dim tag, outline only · selected (on the knobs) = cream frame.
+    """
+    n = len(chain)
+    if n == 0:
+        return
+    gap = 3
+    cw = (W - 12 - (n - 1) * gap) / n
+    for i, b in enumerate(chain):
+        x = 6 + i * (cw + gap)
+        on, sel = bool(b.get("on", True)), bool(b.get("sel"))
+        if on and not bypassed:
+            c.rect(x, y, cw, h, fill=SURFACE, r=4)
+            col = CREAM if sel else LIME
+        else:
+            c.rect(x, y, cw, h, fill=GROUND, r=4, outline=LINE, width=1)
+            col = SAGE if sel else IDLE
+        if sel:
+            c.rect(x, y, cw, h, r=4, outline=CREAM, width=2)
+        tag = str(b.get("tag") or b.get("name", "?"))
+        f = font("barlow", 700, 12)
+        if c.textw(tag, f) > cw - 4:
+            f = font("barlow", 700, 11)
+        c.text(x + cw / 2, y + h / 2 + 4.5, c.fit(tag, f, cw - 3), f, col, anchor="ms")
+
+
 # ---------------------------------------------------------------- screens
 
 def play(st, popup=None, fine=False):
@@ -341,11 +370,16 @@ def play(st, popup=None, fine=False):
     params = st.get("params") or []
     c = Canvas()
     graph = st.get("graph")
+    chain = st.get("chain") or []
+    strip = len(chain) > 1                         # one block: nothing to show
     if bypassed:
         c.rect(0, 0, W, 26, fill=BYPASS_RED)
         c.text(W / 2, 19.5, "BYPASS", font("barlow", 700, 18), "#FFFFFF", anchor="ms", spacing=3)
         preset_band(c, st, 26, 52, True)
         top = 78
+        if strip:
+            chain_strip(c, chain, 80, 17, bypassed=True)
+            top = 100
     elif graph:
         header(c, st)
         pr = st.get("preset") or {}
@@ -364,6 +398,9 @@ def play(st, popup=None, fine=False):
         header(c, st)
         preset_band(c, st, 21, 56, False)
         top = 77
+        if strip:
+            chain_strip(c, chain, 79, 17)
+            top = 99
     if top is not None:
         if bypassed:
             layer = Canvas()

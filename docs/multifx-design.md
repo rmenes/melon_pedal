@@ -1,5 +1,8 @@
 # Melon Pedal — Multi-FX design (v0.1, 2026-11-22)
 
+**Status 2026-11-22: step 1 working on the Pi.** `melon-pedald` 0.4: chain engine (one mod-host instance per block, series routing), category placement, preset format v2 (v1 presets load as one block), DSP limit from the cost table + live JACK meter, remote API chain ops (`add_block`, `remove_block`, `move_block`, `block_on`, `select_block`; CLI shortcuts in `melon_remote_cli.py`). LCD: **chain strip** on the Play screen (lit = on, dim = off, cream frame = selected) and live **DSP nn%** in the header. NexFoot: press C = block on/off, hold B = next block, browser plugins tab C = add block. Startup note: mod-host only answers once its feedback port (5556) is connected, so the controller connects that first.
+
+
 From one LV2 plugin at a time (v1) to a **chain of blocks** per preset. Builds on `melon-pedald`, the remote API (phone app) and the LCD design. DSP numbers: [dsp-budget.md](dsp-budget.md).
 
 ## 1. Decisions

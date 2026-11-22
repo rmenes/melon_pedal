@@ -3,16 +3,28 @@
 Start mod-host in socket mode first:   mod-host -n -p 5555
 Every command is a text line ending in a NUL byte; mod-host answers
 "resp <n>" (n >= 0 is OK, negative is an error code).
+
+Multi-FX: every block of the chain is its own mod-host instance (and JACK client
+effect_<n>). Instance numbers belong to the block, not to its position, so moving a
+block only changes the JACK connections. `route()` connects the chain in series and
+only adds / removes the connections that changed.
 """
 import socket
 import threading
 import time
 
-INSTANCE = 0  # one-plugin rule: always instance 0
+MAX_INSTANCES = 10
 
 
 class ModHostError(RuntimeError):
     pass
+
+
+def link_ports(srcs, dsts):
+    """Which output feeds which input: 1 -> N fans out, N -> N pairs up, N -> 1 takes the first."""
+    if not srcs or not dsts:
+        return []
+    return [(srcs[i] if i < len(srcs) else srcs[0], d) for i, d in enumerate(dsts)]
 
 
 class ModHost:
@@ -20,7 +32,8 @@ class ModHost:
         self.addr = (host, port)
         self.verbose = verbose
         self.sock = None
-        self.loaded = None
+        self.instances = {}              # instance number -> plugin
+        self.links = set()               # (output port, input port) made by route()
         self.lock = threading.Lock()     # the feedback thread also sends commands
 
     def connect(self, retries=10):
@@ -57,41 +70,62 @@ class ModHost:
             print(f"  < {reply}")
         return code
 
-    # --- plugin ---
-    def load(self, plugin, capture, playback):
-        # Always clear instance 0 first, even if we didn't load it: a controller killed by a
-        # restart leaves its plugin in mod-host, and "add" would then fail with -2 (already exists).
-        self.cmd(f"remove {INSTANCE}")      # -3 (no such instance) is fine
-        self.loaded = None
-        code = self.cmd(f"add {plugin.uri} {INSTANCE}")
+    # --- instances (one per block) ---
+    def clear(self):
+        """At start: remove whatever a previous controller left in mod-host (-3 = nothing there)."""
+        for inst in range(MAX_INSTANCES):
+            self.cmd(f"remove {inst}")
+        self.instances.clear()
+        self.links.clear()
+
+    def add(self, inst, plugin):
+        """Load `plugin` as instance `inst` (replacing what was there). Not connected yet: see route()."""
+        self.remove(inst)
+        code = self.cmd(f"add {plugin.uri} {inst}")
         if code < 0:
             raise ModHostError(f"mod-host could not load {plugin.name} (error {code})")
-        self.loaded = plugin
-        fx = f"effect_{INSTANCE}"
-        ins, outs = plugin.audio_in, plugin.audio_out
-        # inputs: one capture port feeds every plugin input; two capture ports go L/R
-        for i, port in enumerate(ins):
-            self.cmd(f"connect {capture[min(i, len(capture) - 1)]} {fx}:{port}")
-        # outputs: a mono plugin feeds both speakers
-        for i, play in enumerate(playback):
-            if outs:
-                self.cmd(f"connect {fx}:{outs[min(i, len(outs) - 1)]} {play}")
+        self.instances[inst] = plugin
+
+    def remove(self, inst):
+        self.cmd(f"remove {inst}")       # -3 (no such instance) is fine; mod-host drops its connections
+        self.instances.pop(inst, None)
+        fx = f"effect_{inst}:"
+        self.links = {l for l in self.links if not (l[0].startswith(fx) or l[1].startswith(fx))}
 
     def unload(self):
-        if self.loaded:
-            try:
-                self.cmd(f"remove {INSTANCE}")
-            finally:
-                self.loaded = None
+        for inst in list(self.instances):
+            self.remove(inst)
 
-    def set(self, control, value):
+    def route(self, insts, capture, playback):
+        """Connect capture -> instance 1 -> instance 2 -> ... -> playback (no instances: dry)."""
+        want, prev = [], list(capture)
+        for inst in insts:
+            plugin = self.instances.get(inst)
+            if plugin is None:
+                continue
+            fx = f"effect_{inst}"
+            ins = [f"{fx}:{p}" for p in plugin.audio_in]
+            outs = [f"{fx}:{p}" for p in plugin.audio_out]
+            want += link_ports(prev, ins)
+            prev = outs or prev
+        want += link_ports(prev, list(playback))
+        want = set(want)
+        for a, b in sorted(self.links - want):
+            self.cmd(f"disconnect {a} {b}")
+        for a, b in sorted(want - self.links):
+            code = self.cmd(f"connect {a} {b}")
+            if code < 0:
+                print(f"! connect {a} -> {b}: mod-host error {code}")
+        self.links = want
+
+    def set(self, inst, control, value):
         v = f"{value:.6g}"
         if control.kind == "param":
-            return self.cmd(f"patch_set {INSTANCE} {control.key} {v}")
-        return self.cmd(f"param_set {INSTANCE} {control.key} {v}")
+            return self.cmd(f"patch_set {inst} {control.key} {v}")
+        return self.cmd(f"param_set {inst} {control.key} {v}")
 
-    def bypass(self, on):
-        return self.cmd(f"bypass {INSTANCE} {1 if on else 0}")
+    def bypass(self, inst, on):
+        return self.cmd(f"bypass {inst} {1 if on else 0}")
 
 
 class Feedback:
@@ -99,7 +133,7 @@ class Feedback:
 
     Used for values the plugin sends to the host, e.g. Melon Tuner's reading:
     "patch_set <instance> <parameter URI> <type> <value>" (older mod-host: no type).
-    Reconnects by itself when mod-host restarts. `on_patch(uri, value)` runs in this thread.
+    Reconnects by itself when mod-host restarts. `on_patch(inst, uri, value)` runs in this thread.
 
     Flow control: after each batch mod-host sends "data_finish" and then waits for
     "output_data_ready" on the command port before it sends the next batch (as mod-ui does).
@@ -157,13 +191,13 @@ class Feedback:
         parts = text.split()
         if self.verbose and parts and parts[0] != "patch_set":
             print(f"  [feedback] {text}")
-        if len(parts) >= 4 and parts[0] == "patch_set" and parts[1] == str(INSTANCE):
+        if len(parts) >= 4 and parts[0] == "patch_set":
             try:
-                value = float(parts[-1])
+                inst, value = int(parts[1]), float(parts[-1])
             except ValueError:
                 return
             try:
-                self.on_patch(parts[2], value)
+                self.on_patch(inst, parts[2], value)
             except Exception as e:          # never let the display kill the reader
                 print(f"! feedback handler: {e!r}")
 

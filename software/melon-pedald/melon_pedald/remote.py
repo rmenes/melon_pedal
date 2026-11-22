@@ -5,10 +5,16 @@ JSON lines over TCP, local only (127.0.0.1:5601). One JSON object per line.
   app -> pedal   {"op": ...}
     hello        {"op":"hello","app":"android","proto":1}   -> hello, plugins, presets, plugin, state
     get          {"op":"get","what":"all"|"state"|"plugin"|"plugins"|"presets"}
-    set          {"op":"set","gen":3,"i":5,"v":-2.5}        parameter i of the loaded plugin
+    set          {"op":"set","gen":3,"i":5,"v":-2.5}        parameter i of the selected block's plugin
     bypass       {"op":"bypass","on":true}                   ("on" missing = toggle)
     page         {"op":"page","n":2}                         knob page on the pedal (0-based)
-    load_plugin  {"op":"load_plugin","i":4}
+    load_plugin  {"op":"load_plugin","i":4}                  put plugin i into the selected block
+    add_block    {"op":"add_block","i":4,"pos":2}            add plugin i as a new block (pos missing =
+                                                             its category's place in the chain)
+    remove_block {"op":"remove_block","b":3}                 blocks are 0-based positions in the chain
+    move_block   {"op":"move_block","b":3,"to":1}
+    block_on     {"op":"block_on","b":3,"on":false}          ("on" missing = toggle)
+    select_block {"op":"select_block","b":3}                 the block on the knobs / Sound screen
     load_preset  {"op":"load_preset","slot":0}               0-23
     save_preset  {"op":"save_preset","slot":0,"name":"Crunch"}
     lib_list     {"op":"lib_list","gen":3,"i":8,"folder":"Marshall"}  folder of a library control ("" = top)
@@ -27,7 +33,10 @@ JSON lines over TCP, local only (127.0.0.1:5601). One JSON object per line.
                  lib = "NAM" | "IR" for Melon NAM / Melon Cab file controls (model_index / ir_index)
     state        {"ev":"state","gen":3,"slot":0|null,"edited":bool,"bypass":bool,"page":0,"pages":8,
                   "mode":"play"|"browse"|"save","values":[...],
-                  "files":[null | "Marshall/JCM800.nam", ...]}    chosen file per control (lib controls)
+                  "files":[null | "Marshall/JCM800.nam", ...],    chosen file per control (lib controls)
+                  "cur":2, "chain":[{"b","i","name","uri","cat","on","cost"}],
+                  "dsp":{"predicted","limit","load","peak","xruns"}}   values/files/plugin = selected block;
+                                                             i = plugin index; cost and dsp in % of the JACK period
     param        {"ev":"param","gen":3,"i":5,"v":-2.5}       a knob, MIDI or another app moved it
     bypass       {"ev":"bypass","on":true}
     lib_list     {"ev":"lib_list","gen":3,"i":8,"folder":"Marshall","dirs":[["Plexi",12],...],
@@ -36,8 +45,9 @@ JSON lines over TCP, local only (127.0.0.1:5601). One JSON object per line.
                  only the fields that changed; see wifi.py. Wi-Fi jobs run on their own thread.
     error        {"ev":"error","msg":"..."}
 
-`gen` goes up every time a plugin is loaded, so a "set" meant for the previous
-plugin is ignored instead of landing on the wrong parameter.
+`gen` goes up every time another block is selected or the selected block gets another plugin,
+so a "set" meant for the previous one is ignored instead of landing on the wrong parameter.
+A refused chain change (full chain, not enough DSP) answers {"ev":"error","msg":...}.
 
 The hub plugs in as a wrapper around Display: every place that already updates
 the LCD also updates the apps, so the pedal logic needs no other changes.
@@ -53,7 +63,7 @@ from .wifi import Wifi
 WIFI_OPS = ("wifi_status", "wifi_scan", "wifi_connect", "wifi_forget")
 
 PROTO = 1
-VERSION = "0.3"
+VERSION = "0.4"
 
 
 def _kind(c):
@@ -137,7 +147,7 @@ class RemoteHub:
         self.clients = []
         self.clients_lock = threading.Lock()
         self.gen = 0
-        self._plugin = None          # plugin object last announced
+        self._plugin = None          # (block, plugin) last announced
         self._presets_sig = None
         self._mode_sent = None
         self.wifi = None
@@ -227,15 +237,24 @@ class RemoteHub:
                 "bypass": p.bypassed, "page": p.page, "pages": p.pages,
                 "mode": "browse" if p.mode == "files" else p.mode,
                 "values": [p.values.get(c.key, c.default) for c in p.plugin.controls],
-                "files": [p.files.get(c.key) for c in p.plugin.controls]}
+                "files": [p.files.get(c.key) for c in p.plugin.controls],
+                "cur": p.cur, "chain": self._chain(), "dsp": p.dsp()}
+
+    def _chain(self):
+        p = self.pedal
+        index = {id(pl): i for i, pl in enumerate(p.plugins)}
+        return [{"b": n, "i": index.get(id(b.plugin)), "name": b.plugin.name, "uri": b.plugin.uri,
+                 "cat": b.category, "on": b.on, "cost": round(p.costs.cost(b), 1)}
+                for n, b in enumerate(p.chain)]
 
     def _sync(self):
         """Called whenever the LCD gets a full page: tell apps what changed."""
         p = self.pedal
         if p is None or not p.values:
             return
-        if p.plugin is not self._plugin:
-            self._plugin = p.plugin
+        key = (id(p.block), p.plugin)
+        if key != self._plugin:
+            self._plugin = key
             self.gen += 1
             self.broadcast(self.msg_plugins())
             self.broadcast(self.msg_plugin())
@@ -271,7 +290,8 @@ class RemoteHub:
         try:
             with p.lock:
                 if op == "hello":
-                    client.send({"ev": "hello", "proto": PROTO, "name": self.name, "version": VERSION})
+                    client.send({"ev": "hello", "proto": PROTO, "name": self.name, "version": VERSION,
+                                 "features": ["chain"]})
                     for m in (self.msg_plugins(), self.msg_presets(), self.msg_plugin(), self.msg_state()):
                         client.send(m)
                 elif op == "get":
@@ -285,10 +305,7 @@ class RemoteHub:
                     self._set(msg)
                 elif op == "bypass":
                     on = msg.get("on")
-                    p.bypassed = (not p.bypassed) if on is None else bool(on)
-                    p.engine.bypass(p.bypassed)
-                    print(f"*** {'BYPASS' if p.bypassed else 'EFFECT ON'} *** (app)")
-                    p.display.bypass(p.bypassed)
+                    p.set_bypass((not p.bypassed) if on is None else bool(on))
                 elif op == "page":
                     n = int(msg.get("n", 0))
                     if 0 <= n < p.pages and p.mode == "play":
@@ -299,8 +316,24 @@ class RemoteHub:
                     i = int(msg["i"])
                     if not 0 <= i < len(p.plugins):
                         raise ValueError("no such plugin")
-                    p.mode, p.slot = "play", None
+                    p.mode = "play"
                     p.load(i)
+                elif op == "add_block":
+                    i = int(msg["i"])
+                    if not 0 <= i < len(p.plugins):
+                        raise ValueError("no such plugin")
+                    p.mode = "play"
+                    p.add_block(i, msg.get("pos"))
+                elif op == "remove_block":
+                    p.mode = "play"
+                    p.remove_block(msg["b"])
+                elif op == "move_block":
+                    p.move_block(msg["b"], msg["to"])
+                elif op == "block_on":
+                    p.block_on(msg["b"], msg.get("on"))
+                elif op == "select_block":
+                    p.mode = "play"
+                    p.select_block(msg["b"])
                 elif op == "load_preset":
                     slot = int(msg["slot"])
                     p.mode = "play"
@@ -337,7 +370,7 @@ class RemoteHub:
             v = p.values[c.key]
         else:
             p.values[c.key] = v
-            p.engine.set(c, v)
+            p.send(c, v)
         page = p.page_controls()
         if p.mode == "play" and c in page:
             k = page.index(c)
@@ -390,8 +423,7 @@ class RemoteHub:
         name = "".join(ch for ch in str(msg.get("name", "")) if ch in CHARSET)    # LCD charset only
         name = " ".join(name.split())[:NAME_LEN].strip()
         name = name or p.plugin.name
-        p.presets.put(slot, name, p.plugin, p.values, p.files)
-        p.slot = slot
+        p.save_preset(slot, name)
         print(f"  saved {slot // BANK_SIZE + 1}-{slot % BANK_SIZE + 1:02d} {name} (app)")
         if p.mode == "play":
             p.show_page()
@@ -432,3 +464,7 @@ class _HubDisplay:
     def files(self, pedal):
         self._d.files(pedal)
         self._hub.mode_changed()
+
+    def notice(self, text):
+        self._d.notice(text)
+        self._hub.broadcast({"ev": "error", "msg": str(text)})

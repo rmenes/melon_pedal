@@ -1,15 +1,20 @@
-"""melon-pedald, test version 0.3: Livtra NexFoot + mod-host + presets + remote API (Bluetooth app).
+"""melon-pedald, test version 0.4: multi-FX chain + Livtra NexFoot + mod-host + presets + remote API.
+
+A preset is a chain of up to 10 blocks in series (docs/multifx-design.md). The knobs, the LCD
+and the app's Sound screen work on the SELECTED block.
 
 Footswitch-knobs A-D (play screen):
-  turn A-D   -> parameters 1-4 of the current page
-  press A    -> bypass on/off
+  turn A-D   -> parameters 1-4 of the current page (of the selected block)
+  press A    -> bypass the whole pedal on/off
   press B    -> next page (wraps around)
-  press C    -> previous plugin
-  press D    -> next plugin
+  hold B     -> select the next block of the chain (wraps around)
+  press C    -> selected block on/off
+  press D    -> next plugin in the selected block
   hold C     -> save preset
   hold D     -> preset / plugin browser
 
-Browser:  turn A = move · press A = back · press B/C = presets <-> plugins · press D = load
+Browser:  turn A = move · press A = back · press B = presets <-> plugins · press D = load
+          plugins tab: press D = replace the selected block · press C = add as a new block
 Files:    (turning the Library Model / Library IR knob of Melon NAM / Melon Cab opens it)
           that knob: turn = one by one, press = open folder / choose file
           press A = up a folder / back, turn A = jump  (B and C instead when it was opened with A)
@@ -33,9 +38,11 @@ import threading
 import time
 
 from . import catalog, library, tuner
+from .chain import (CHAIN_FACTOR, LIMIT, MAX_BLOCKS, NAM_COST, Block, CostTable, insert_position,
+                    open_meter)
 from .display import Display
 from .engine import FakeEngine, Feedback, ModHost, ModHostError
-from .presets import CHARSET, DEFAULT_PATH, NAME_LEN, SLOTS, PresetStore, label
+from .presets import CHARSET, DEFAULT_PATH, NAME_LEN, SLOTS, PresetStore, chain_of, label
 from .remote import RemoteHub
 
 TURN_CC = [57, 68, 74, 89]     # NexFoot A, B, C, D (turn)
@@ -46,19 +53,26 @@ PICKUP_WINDOW = 3 / 127        # "close enough" to pick up a parameter
 HOLD_SECONDS = 0.7
 
 CC_LINE = re.compile(r"Control change\s+(\d+),\s*controller\s+(\d+),\s*value\s+(\d+)")
+WATCH_SECONDS = 1.5            # after adding a block: watch the live DSP load this long
+
+
+class ChainError(RuntimeError):
+    """A chain change that was refused (full chain, not enough DSP, ...). The pedal keeps playing."""
 
 
 class Pedal:
-    def __init__(self, engine, plugins, capture, playback, display=None, presets=None):
+    def __init__(self, engine, plugins, capture, playback, display=None, presets=None, costs=None, meter=None):
         self.engine = engine
         self.plugins = plugins
         self.capture = capture
         self.playback = playback
         self.display = display or Display(enabled=False)
         self.presets = presets or PresetStore()
-        self.idx = 0
+        self.costs = costs or CostTable()
+        self.meter = meter               # live JACK load (chain.DspMeter) or None
+        self.chain = []                  # Blocks in signal order
+        self.cur = 0                     # selected block (knobs, LCD, app Sound screen)
         self.page = 0
-        self.values = {}
         self.bypassed = False
         self.last_cc = [None] * 4
         self.picked = [False] * 4
@@ -76,13 +90,40 @@ class Pedal:
         self.timers = [None] * 4
         self.readout_seen = False        # Melon Tuner: first reading arrived from mod-host
         self.libs = library.libraries()  # NAM / IR files for Melon NAM / Melon Cab
-        self.files = {}                  # control key -> chosen file (path inside its library)
         self.fb = None                   # file browser state (mode "files")
         self.fb_closed = (None, 0.0)     # (knob, time): ignore that knob briefly after choosing
 
+    # --- the selected block ---
+    @property
+    def block(self):
+        return self.chain[self.cur] if self.chain else None
+
     @property
     def plugin(self):
-        return self.plugins[self.idx]
+        return self.block.plugin
+
+    @property
+    def idx(self):
+        """Index of the selected block's plugin in self.plugins."""
+        b = self.block
+        return next((i for i, pl in enumerate(self.plugins) if b and pl is b.plugin), 0)
+
+    @property
+    def values(self):
+        return self.block.values if self.block else {}
+
+    @property
+    def files(self):
+        """control key -> chosen file (path inside its library), of the selected block."""
+        return self.block.files if self.block else {}
+
+    def send(self, c, value, block=None):
+        """Set control c of a block (default: the selected one) in mod-host."""
+        return self.engine.set((block or self.block).inst, c, value)
+
+    def notice(self, text):
+        print(f"! {text}")
+        self.display.notice(text)
 
     def layout(self):
         """The knob pages: 4 controls each, in plugin order.
@@ -122,10 +163,11 @@ class Pedal:
         return {"index": idx, "tuning": tuner.tuning_name(idx), "strings": tuner.string_names(idx),
                 "reference": val("reference", 440.0), "mute": val("mute", 0) >= 0.5}
 
-    def on_patch(self, uri, value):
-        """A value sent by the plugin (mod-host feedback thread)."""
+    def on_patch(self, inst, uri, value):
+        """A value sent by a plugin (mod-host feedback thread)."""
         with self.lock:
-            if uri != self.plugin.readout or self.engine.loaded is not self.plugin:
+            b = self.block
+            if b is None or b.inst != inst or uri != b.plugin.readout:
                 return
             if not self.readout_seen:
                 self.readout_seen = True
@@ -141,13 +183,19 @@ class Pedal:
         p = self.presets.get(self.slot) if self.slot is not None else None
         if not p:
             return False
-        saved, saved_files = p.get("values", {}), p.get("files", {})
-        for c in self.plugin.controls:
-            if self.lib_of(c) is not None:
-                if self.files.get(c.key) != saved_files.get(c.key):
-                    return True
-            elif abs(self.values[c.key] - saved.get(c.key, c.default)) > 1e-6:
+        entries = chain_of(p)
+        if [b.plugin.uri for b in self.chain] != [e["plugin"] for e in entries]:
+            return True
+        for b, e in zip(self.chain, entries):
+            if b.on != e.get("on", True):
                 return True
+            saved, saved_files = e.get("values", {}), e.get("files", {})
+            for c in b.plugin.controls:
+                if self.lib_of(c) is not None:
+                    if b.files.get(c.key) != saved_files.get(c.key):
+                        return True
+                elif abs(b.values[c.key] - float(saved.get(c.key, c.default))) > 1e-6:
+                    return True
         return False
 
     # --- NAM / IR library (Melon NAM model_index, Melon Cab ir_index) ---
@@ -164,85 +212,257 @@ class Pedal:
             return None
         return library.title(self.files.get(c.key)) if value >= 0 else "None"
 
-    def set_file(self, c, rel):
-        """Load `rel` (path inside c's library, None = no file) into the plugin."""
+    def set_file(self, c, rel, block=None):
+        """Load `rel` (path inside c's library, None = no file) into a block's plugin."""
+        b = block or self.block
         lib = self.lib_of(c)
         idx = lib.index_of(rel) if rel else library.NONE
         if rel and idx == library.NONE:
             print(f"! {rel} is not in {lib.root} any more")
             rel = None
-        if idx >= 0 and abs(self.values.get(c.key, c.default) - idx) < 1e-9:
-            self.engine.set(c, float(library.NONE))   # same number: the plugin only reacts to a change
-        self.values[c.key] = float(idx)
-        self.files[c.key] = rel
-        return self.engine.set(c, float(idx))
+        if idx >= 0 and abs(b.values.get(c.key, c.default) - idx) < 1e-9:
+            self.send(c, float(library.NONE), b)   # same number: the plugin only reacts to a change
+        b.values[c.key] = float(idx)
+        b.files[c.key] = rel
+        return self.send(c, float(idx), b)
 
-    def _apply_files(self, values, files):
-        """After loading a plugin / preset: point the library controls at the preset's files."""
-        lib_controls = [c for c in self.plugin.controls if self.lib_of(c) is not None]
+    def _apply_files(self, values, files, block=None):
+        """After loading a plugin / preset: point a block's library controls at the preset's files."""
+        b = block or self.block
+        lib_controls = [c for c in b.plugin.controls if self.lib_of(c) is not None]
         for lib in {id(self.lib_of(c)): self.lib_of(c) for c in lib_controls}.values():
             lib.refresh()
         for c in lib_controls:
             rel = (files or {}).get(c.key)
             if rel is None and values and float(values.get(c.key, -1)) >= 0:
                 rel = self.lib_of(c).path_at(int(float(values[c.key])))   # preset saved before "files"
-            if rel != self.files.get(c.key) or (rel and self.values.get(c.key, -1) < 0):
-                self.set_file(c, rel)
+            if rel != b.files.get(c.key) or (rel and b.values.get(c.key, -1) < 0):
+                self.set_file(c, rel, b)
+
+    # --- chain plumbing ---
+    def _free_inst(self):
+        used = {b.inst for b in self.chain}
+        return next(i for i in range(MAX_BLOCKS) if i not in used)
+
+    def route(self):
+        self.engine.route([b.inst for b in self.chain], self.capture, self.playback)
+
+    def apply_bypass(self, b):
+        """A block is bypassed in mod-host when it is off or the whole pedal is bypassed."""
+        self.engine.bypass(b.inst, self.bypassed or not b.on)
+
+    def set_bypass(self, on):
+        self.bypassed = bool(on)
+        for b in self.chain:
+            self.apply_bypass(b)
+        print(f"*** {'BYPASS' if self.bypassed else 'EFFECT ON'} ***")
+        self.display.bypass(self.bypassed)
+
+    def _load_block(self, b, plugin, values=None, files=None):
+        """(Re)load block b with `plugin` and set its values. Raises ModHostError."""
+        t = time.time()
+        self.engine.add(b.inst, plugin)
+        b.plugin = plugin
+        b.values = {c.key: c.default for c in plugin.controls}
+        b.files = {}
+        for c in plugin.controls:
+            if values and c.key in values and self.lib_of(c) is None:
+                b.values[c.key] = float(values[c.key])
+                self.send(c, b.values[c.key], b)
+        self._apply_files(values, files, b)
+        if self.bypassed or not b.on:
+            self.apply_bypass(b)
+        return (time.time() - t) * 1000
+
+    def dsp(self):
+        """DSP numbers for the LCD and the apps (% of the JACK period)."""
+        d = {"predicted": round(self.costs.predicted(self.chain), 1), "limit": LIMIT}
+        if self.meter:
+            d.update(load=round(self.meter.load(), 1), peak=round(self.meter.peak(2.0), 1),
+                     xruns=self.meter.xruns)
+        return d
+
+    def _check_budget(self, new_chain, delta):
+        """Refuse a change whose predicted DSP load is over the limit.
+
+        new_chain: the chain after the change; delta: its cost minus the current chain's cost.
+        Uses the cost table, and the live JACK load when the meter runs (whichever is higher)."""
+        pred = self.costs.predicted(new_chain)
+        if self.meter:
+            pred = max(pred, self.meter.peak(2.0) + CHAIN_FACTOR * delta)
+        if pred <= LIMIT:
+            return
+        hint = ""
+        full_nam = [b for b in new_chain if self.costs.cost(b) >= NAM_COST["full"] - 1e-6]
+        if full_nam:
+            hint = " Tip: set Melon NAM's Model Size to Light (about 32% less)."
+        raise ChainError(f"not enough DSP: the chain would need about {pred:.0f}% (limit {LIMIT:.0f}%).{hint}")
 
     # --- actions ---
     def load(self, idx, values=None, files=None):
+        """Put plugin `idx` into the selected block (an empty chain gets its first block)."""
+        new = not self.chain
+        if new:
+            plugin = self.plugins[idx % len(self.plugins)]
+            self.chain = [Block(plugin, inst=self._free_inst())]
+            self.cur = 0
+        else:
+            b, plugin = self.block, self.plugins[idx % len(self.plugins)]
+            trial = Block(plugin, inst=b.inst, values={c.key: c.default for c in plugin.controls})
+            others = [x for x in self.chain if x is not b]
+            self._check_budget(others + [trial], self.costs.cost(trial) - self.costs.cost(b))
+        b = self.block
         for attempt in range(len(self.plugins)):
-            self.idx = (idx + attempt) % len(self.plugins)
+            plugin = self.plugins[(idx + attempt) % len(self.plugins)]
             try:
-                t = time.time()
-                self.engine.load(self.plugin, self.capture, self.playback)
-                ms = (time.time() - t) * 1000
+                ms = self._load_block(b, plugin, values, files)
                 break
             except ModHostError as e:
                 print(f"! {e}")
         else:
             raise SystemExit("no plugin could be loaded")
-        self.values = {c.key: c.default for c in self.plugin.controls}
-        self.files = {}
-        for c in self.plugin.controls:
-            if values and c.key in values and self.lib_of(c) is None:
-                self.values[c.key] = float(values[c.key])
-                self.engine.set(c, self.values[c.key])
-        self._apply_files(values, files)
+        self.route()
         self.page = 0
         self.readout_seen = False
-        if self.bypassed:
-            self.engine.bypass(True)
         self.release_knobs()
         print(f"\n=== {self.plugin.name}  ({len(self.plugin.controls)} parameters, "
-              f"loaded in {ms:.0f} ms) ===")
+              f"loaded in {ms:.0f} ms) · block {self.cur + 1}/{len(self.chain)} ===")
         self.show_page()
 
     def load_preset(self, slot):
         p = self.presets.get(slot)
         if not p:
             return False
-        idx = next((i for i, pl in enumerate(self.plugins) if pl.uri == p["plugin"]), None)
-        if idx is None:
-            print(f"! preset {label(slot)} needs {p.get('plugin_name', p['plugin'])}, which is not installed")
+        entries = chain_of(p)
+        by_uri = {pl.uri: pl for pl in self.plugins}
+        missing = [e.get("plugin_name") or e["plugin"] for e in entries if e["plugin"] not in by_uri]
+        if missing or not entries:
+            print(f"! preset {label(slot)} needs {', '.join(missing) or 'a plugin'}, which is not installed")
             return False
         self.slot = slot
-        print(f"\n>>> preset {label(slot)} {p['name']}")
-        if idx == self.idx and self.engine.loaded is self.plugin:
-            for c in self.plugin.controls:      # same plugin: just set the values
-                if self.lib_of(c) is not None:
-                    continue
-                v = float(p["values"].get(c.key, c.default))
-                if abs(v - self.values[c.key]) > 1e-9:
-                    self.values[c.key] = v
-                    self.engine.set(c, v)
-            self._apply_files(p.get("values"), p.get("files"))
-            self.page = 0
-            self.release_knobs()
-            self.show_page()
-        else:
-            self.load(idx, p.get("values"), p.get("files"))
+        print(f"\n>>> preset {label(slot)} {p['name']}  ({len(entries)} block{'s' if len(entries) > 1 else ''})")
+        if [b.plugin.uri for b in self.chain] == [e["plugin"] for e in entries]:
+            for b, e in zip(self.chain, entries):     # same chain: just set the values (no gap)
+                saved = e.get("values", {})
+                for c in b.plugin.controls:
+                    if self.lib_of(c) is not None:
+                        continue
+                    v = float(saved.get(c.key, c.default))
+                    if abs(v - b.values[c.key]) > 1e-9:
+                        b.values[c.key] = v
+                        self.send(c, v, b)
+                self._apply_files(saved, e.get("files"), b)
+                if b.on != e.get("on", True):
+                    b.on = e.get("on", True)
+                    self.apply_bypass(b)
+        else:                                         # other plugins: rebuild the chain
+            for b in self.chain:
+                self.engine.remove(b.inst)
+            self.chain = []
+            for e in entries:
+                b = Block(by_uri[e["plugin"]], inst=self._free_inst(), on=e.get("on", True))
+                self.chain.append(b)
+                try:
+                    self._load_block(b, b.plugin, e.get("values"), e.get("files"))
+                except ModHostError as err:
+                    print(f"! {err}")
+                    self.chain.remove(b)
+            if not self.chain:
+                raise SystemExit("no plugin of the preset could be loaded")
+            self.route()
+        pred = self.costs.predicted(self.chain)
+        if pred > LIMIT:
+            print(f"! this preset is predicted at {pred:.0f}% DSP (limit {LIMIT:.0f}%)")
+        self.cur = min(max(int(p.get("cur", 0)), 0), len(self.chain) - 1)
+        self.page = 0
+        self.readout_seen = False
+        self.release_knobs()
+        self.show_page()
         return True
+
+    # --- chain editing ---
+    def _block_index(self, i):
+        i = int(i)
+        if not 0 <= i < len(self.chain):
+            raise ChainError(f"no block {i + 1} (the chain has {len(self.chain)})")
+        return i
+
+    def add_block(self, plugin_idx, pos=None):
+        """Add plugin `plugin_idx` as a new block: at its category's place, or at `pos`."""
+        if len(self.chain) >= MAX_BLOCKS:
+            raise ChainError(f"the chain is full ({MAX_BLOCKS} blocks)")
+        plugin = self.plugins[int(plugin_idx)]
+        b = Block(plugin, inst=self._free_inst(), values={c.key: c.default for c in plugin.controls})
+        self._check_budget(self.chain + [b], self.costs.cost(b))
+        pos = insert_position(self.chain, plugin) if pos is None else min(max(int(pos), 0), len(self.chain))
+        xruns = self.meter.xruns if self.meter else 0
+        try:
+            ms = self._load_block(b, plugin)
+        except ModHostError as e:
+            raise ChainError(str(e))
+        self.chain.insert(pos, b)
+        self.route()
+        print(f"\n+++ block {pos + 1}/{len(self.chain)}: {plugin.name} (loaded in {ms:.0f} ms, "
+              f"predicted DSP {self.costs.predicted(self.chain):.0f}%)")
+        self.select_block(pos)
+        if self.meter:
+            t = threading.Timer(WATCH_SECONDS, self._after_add, (b, xruns))
+            t.daemon = True
+            t.start()
+        return pos
+
+    def _after_add(self, b, xruns_before):
+        """A moment after adding a block: take it out again if the Pi can't keep up."""
+        with self.lock:
+            if b not in self.chain or len(self.chain) < 2:
+                return
+            peak, xr = self.meter.peak(WATCH_SECONDS), self.meter.xruns - xruns_before
+            if peak <= LIMIT and xr == 0:
+                return
+            self.remove_block(self.chain.index(b))
+            self.notice(f"{b.short_name} removed again: DSP {peak:.0f}%"
+                        + (f", {xr} xruns" if xr else "") + f" (limit {LIMIT:.0f}%)")
+
+    def remove_block(self, i):
+        i = self._block_index(i)
+        if len(self.chain) == 1:
+            raise ChainError("the last block can't be removed (load another plugin instead)")
+        b = self.chain.pop(i)
+        self.engine.remove(b.inst)
+        self.route()
+        print(f"--- removed block {i + 1}: {b.plugin.name}")
+        self.select_block(min(self.cur if i > self.cur else max(self.cur - 1, 0), len(self.chain) - 1))
+
+    def move_block(self, i, to):
+        i = self._block_index(i)
+        to = min(max(int(to), 0), len(self.chain) - 1)
+        if i == to:
+            return
+        sel = self.block
+        b = self.chain.pop(i)
+        self.chain.insert(to, b)
+        self.route()
+        self.cur = self.chain.index(sel)
+        print(f"<-> {b.plugin.name}: block {i + 1} -> {to + 1}")
+        self.show_page()
+
+    def block_on(self, i, on=None):
+        b = self.chain[self._block_index(i)]
+        b.on = (not b.on) if on is None else bool(on)
+        self.apply_bypass(b)
+        print(f"  block {self.chain.index(b) + 1} {b.plugin.name}: {'ON' if b.on else 'off'}")
+        self.show_page()
+
+    def select_block(self, i):
+        self.cur = self._block_index(i)
+        self.page = 0
+        self.readout_seen = False
+        self.release_knobs()
+        self.show_page()
+
+    def save_preset(self, slot, name):
+        self.presets.put(slot, name, self.chain, self.cur)
+        self.slot = slot
 
     def release_knobs(self):
         self.picked = [False] * 4
@@ -252,7 +472,11 @@ class Pedal:
         pre = ""
         if self.slot is not None:
             pre = f"{label(self.slot)} {self.presets.get(self.slot)['name']}{' *' if self.edited else ''} | "
-        print(f"--- {pre}{self.plugin.name} | page {self.page + 1}/{self.pages} | {state}")
+        blk = f"block {self.cur + 1}/{len(self.chain)}{'' if self.block.on else ' (off)'} " if len(self.chain) > 1 else ""
+        print(f"--- {pre}{blk}{self.plugin.name} | page {self.page + 1}/{self.pages} | {state}")
+        if len(self.chain) > 1:
+            print("    chain: " + " > ".join(("[" if i == self.cur else "") + b.short_name + ("" if b.on else " off")
+                                          + ("]" if i == self.cur else "") for i, b in enumerate(self.chain)))
         for name, c in zip(NAMES, self.page_controls()):
             if c:
                 txt = self.lib_text(c, self.values[c.key]) or c.format(self.values[c.key])
@@ -292,7 +516,7 @@ class Pedal:
             return
         was_edited = self.edited
         self.values[c.key] = value
-        code = self.engine.set(c, value)
+        code = self.send(c, value)
         err = "" if code >= 0 else f"   ! mod-host error {code}"
         print(f"  {NAMES[k]}  {c.label:<22} {c.format(value)}{err}")
         self.display.value(k, c, value)
@@ -306,7 +530,7 @@ class Pedal:
         if self.mode != "play":
             self.consumed[k] = True
             return self.menu_press(k)
-        if k in (0, 1):
+        if k == 0:
             self.consumed[k] = True
             self.short_press(k)
         else:
@@ -330,30 +554,31 @@ class Pedal:
                 return
             self.consumed[k] = True
             self.timers[k] = None
-            if k == 2:
+            if k == 1:
+                if len(self.chain) > 1:
+                    self.select_block((self.cur + 1) % len(self.chain))
+            elif k == 2:
                 self.open_save()
             elif k == 3:
                 self.open_browser()
 
     def short_press(self, k):
         if k == 0:
-            self.bypassed = not self.bypassed
-            self.engine.bypass(self.bypassed)
-            print(f"*** {'BYPASS' if self.bypassed else 'EFFECT ON'} ***")
-            self.display.bypass(self.bypassed)
+            self.set_bypass(not self.bypassed)
         elif k == 1:
             self.page = (self.page + 1) % self.pages
             self.release_knobs()
             self.show_page()
-        elif k in (2, 3):
-            self.slot = None
-            self.load(self.idx + (1 if k == 3 else -1))
+        elif k == 2:
+            self.block_on(self.cur)
+        elif k == 3:
+            self.load(self.idx + 1)
 
     # --- browser ---
     def open_browser(self):
         self.mode, self.tab = "browse", "presets"
         self.sel = self.slot if self.slot is not None else 0
-        print("\n[ presets ]  turn A = move · press D = load · press B/C = plugins · press A = back")
+        print("\n[ presets ]  turn A = move · press D = load · press B = plugins · press A = back")
         self.show_menu()
 
     def browser_rows(self):
@@ -421,11 +646,15 @@ class Pedal:
         if self.mode == "browse":
             if k == 0:
                 self.back()
-            elif k in (1, 2):
+            elif k == 1 or (k == 2 and self.tab == "presets"):
                 self.tab = "plugins" if self.tab == "presets" else "presets"
                 self.sel = self.idx if self.tab == "plugins" else (self.slot or 0)
-                print(f"\n[ {self.tab} ]")
+                print(f"\n[ {self.tab} ]" + ("  press D = replace the selected block · press C = add as a new block"
+                                             if self.tab == "plugins" else ""))
                 self.show_menu()
+            elif k == 2:                                   # plugins tab: add as a new block
+                self.mode = "play"
+                self.add_block(self.sel)
             elif k == 3:
                 if self.tab == "presets":
                     if not self.presets.get(self.sel):
@@ -434,7 +663,7 @@ class Pedal:
                     self.mode = "play"
                     self.load_preset(self.sel)
                 else:
-                    self.mode, self.slot = "play", None
+                    self.mode = "play"
                     self.load(self.sel)
         elif self.mode == "save":
             if k == 0:
@@ -442,8 +671,7 @@ class Pedal:
                 self.back()
             elif k == 3:
                 name = "".join(self.save_name).strip() or self.plugin.name
-                self.presets.put(self.save_slot, name, self.plugin, self.values, self.files)
-                self.slot = self.save_slot
+                self.save_preset(self.save_slot, name)
                 print(f"  saved {label(self.save_slot)} {name}")
                 self.back()
 
@@ -524,15 +752,20 @@ class Pedal:
             return
         _, cc, value = map(int, m.groups())
         with self.lock:
-            if cc in TURN_CC:
-                self.turn(TURN_CC.index(cc), value)
-            elif cc in PRESS_CC:
-                k = PRESS_CC.index(cc)
-                pressed = value < 64 if PRESS_LOW else value >= 64
-                if pressed and not self.down[k]:
-                    self.press_down(k)
-                elif not pressed and self.down[k]:
-                    self.press_up(k)
+            try:
+                if cc in TURN_CC:
+                    self.turn(TURN_CC.index(cc), value)
+                elif cc in PRESS_CC:
+                    k = PRESS_CC.index(cc)
+                    pressed = value < 64 if PRESS_LOW else value >= 64
+                    if pressed and not self.down[k]:
+                        self.press_down(k)
+                    elif not pressed and self.down[k]:
+                        self.press_up(k)
+            except ChainError as e:
+                self.mode = "play"
+                self.notice(str(e))
+                self.show_page()
 
 
 def main():
@@ -554,6 +787,10 @@ def main():
     ap.add_argument("--feedback-port", type=int, default=0,
                     help="mod-host feedback port (default: --port + 1, i.e. mod-host -f 5556)")
     ap.add_argument("--presets", default=DEFAULT_PATH, help="preset file")
+    ap.add_argument("--costs", default=None,
+                    help="DSP cost table from dsp_bench.py (default: /data/plugin_costs.json, then ~/plugin_costs.json)")
+    ap.add_argument("--no-dsp-meter", action="store_true",
+                    help="don't read the live JACK load (the chain limit then uses the cost table only)")
     ap.add_argument("--list", action="store_true", help="list plugins and their parameters, then exit")
     ap.add_argument("--fake", action="store_true", help="no mod-host: print the commands instead")
     ap.add_argument("--stdin", action="store_true", help="read aseqdump-style lines from stdin instead of MIDI")
@@ -584,33 +821,59 @@ def main():
         return
 
     engine = FakeEngine() if args.fake else ModHost(port=args.port, verbose=args.verbose)
+    pedal_ref = []              # the feedback thread starts before the Pedal exists
     try:
         engine.connect()
-    except ModHostError as e:
-        raise SystemExit(str(e))
+        if not args.fake:
+            # mod-host only answers commands once a client is connected to its feedback port too,
+            # so connect that first (and wait for it) before the first command.
+            fb = Feedback(lambda *a: pedal_ref and pedal_ref[0].on_patch(*a),
+                          lambda: engine.cmd("output_data_ready"),
+                          port=args.feedback_port or args.port + 1, verbose=args.verbose)
+            fb.start()
+            t = time.time()
+            while not fb.connected and time.time() - t < 10:
+                time.sleep(0.05)
+            if not fb.connected:
+                print("! mod-host feedback port not connected yet; mod-host may not answer until it is")
+        engine.clear()          # instances left by a previous run (a restart of only this controller)
+    except (ModHostError, OSError) as e:
+        raise SystemExit(f"mod-host does not answer: {e}")
+    costs = CostTable(args.costs)
+    meter = None if (args.fake or args.no_dsp_meter) else open_meter()
 
     display = Display(enabled=not args.no_lcd)
     hub = RemoteHub(port=args.remote_port) if args.remote_port else None
     if hub:
         display = hub.wrap(display)      # LCD updates also go to the apps
     store = PresetStore(args.presets)
-    pedal = Pedal(engine, plugins, args.capture.split(","), args.playback.split(","), display, store)
+    pedal = Pedal(engine, plugins, args.capture.split(","), args.playback.split(","), display, store, costs, meter)
+    pedal_ref.append(pedal)
     if hub:
         try:
             hub.start(pedal)
         except OSError as e:
             print(f"! remote API off: {e}")
-    if not args.fake:
-        Feedback(pedal.on_patch, lambda: engine.cmd("output_data_ready"),
-                 port=args.feedback_port or args.port + 1, verbose=args.verbose).start()
     start = next((i for i, p in enumerate(plugins) if args.plugin.lower() in (p.uri + p.name).lower()), 0)
     print(f"Found {len(plugins)} plugins: " + ", ".join(p.name for p in plugins))
     print(f"{sum(1 for p in store.slots if p)} presets in {args.presets}")
-    print(f"press: A = bypass, B = next page, C = previous plugin, D = next plugin | "
-          f"hold C = save, hold D = presets   (press CCs A-D: {PRESS_CC})")
+    print(f"press: A = bypass, B = next page, C = block on/off, D = next plugin | "
+          f"hold B = next block, hold C = save, hold D = presets   (press CCs A-D: {PRESS_CC})")
     with pedal.lock:
         if not (args.preset and pedal.load_preset(args.preset - 1)):
             pedal.load(start)
+
+    if meter:
+        def dsp_header():
+            """Keep the LCD header's "DSP nn%" live (only sends when it changes by 1 % or more)."""
+            last = None
+            while True:
+                time.sleep(1.0)
+                v = round(meter.load())
+                if last is None or abs(v - last) >= 1:
+                    last = v
+                    display.dsp_load(v)
+        threading.Thread(target=dsp_header, daemon=True, name="dsp-header").start()
 
     proc = [None]
 

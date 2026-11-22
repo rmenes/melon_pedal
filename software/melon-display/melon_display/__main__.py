@@ -44,6 +44,10 @@ SAMPLE_EQ = {
     "params": [{"label": f"{EQ_FREQS[b]} Hz", "value": EQ_GAINS[b], "min": -12, "max": 12,
                 "unit": "dB", "default": 0, "band": b} for b in range(8, 12)],
 }
+SAMPLE_CHAIN = dict(SAMPLE_DRIVE, plugin="3/7 · Melon Dirt", chain=[
+    {"tag": "GATE", "on": True}, {"tag": "COMP", "on": False}, {"tag": "DRIVE", "on": True, "sel": True},
+    {"tag": "AMP", "on": True}, {"tag": "CAB", "on": True}, {"tag": "MOD", "on": False},
+    {"tag": "DLY", "on": True}])
 TUNER_BASE = {
     "screen": "tuner", "bank": "PLUGIN 16/16", "page": 1, "pages": 3, "midi": True,
     "preset": {"number": "--", "name": "Melon Tuner"}, "plugin": "Melon Tuner",
@@ -224,6 +228,9 @@ def render_pngs(outdir):
         "fine": (dict(SAMPLE_DRIVE, params=[dict(SAMPLE_DRIVE["params"][0], value=62.2)] + SAMPLE_DRIVE["params"][1:]), 0, True),
         "popup-enum": (SAMPLE_DRIVE, 3, False),
         "eq": (SAMPLE_EQ, None, False),
+        "chain": (SAMPLE_CHAIN, None, False),
+        "chain-bypass": (dict(SAMPLE_CHAIN, bypass=True), None, False),
+        "chain-popup": (SAMPLE_CHAIN, 1, False),
         "boot": (BOOT, None, False),
     }
     def tun(reading=None, **kw):

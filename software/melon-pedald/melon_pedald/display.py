@@ -36,14 +36,17 @@ class Display:
         self.bands = _bands(plugin.controls)
         controls = pedal.page_controls()
         preset = pedal.presets.get(pedal.slot) if pedal.slot is not None else None
+        chain = getattr(pedal, "chain", [])
+        blk = f"{pedal.cur + 1}/{len(chain)} · " if len(chain) > 1 else ""
+        off = " · OFF" if chain and not pedal.block.on else ""
         if preset:
             bank = f"BANK {pedal.slot // 6 + 1}"
             band = {"number": f"{pedal.slot % 6 + 1:02d}", "name": preset["name"], "edited": pedal.edited}
-            sub = plugin.name
+            sub = f"{blk}{plugin.name}{off}"
         else:
             bank = f"PLUGIN {pedal.idx + 1}/{len(pedal.plugins)}"
             band = {"number": "--", "name": plugin.name, "edited": False}
-            sub = "not saved · hold C to save"
+            sub = f"{blk}not saved · hold C to save{off}"
         msg = {
             "op": "update", "screen": "play", "midi": getattr(self, "midi_ok", True),
             "bank": bank, "preset": band, "plugin": sub,
@@ -51,7 +54,13 @@ class Display:
             "bypass": pedal.bypassed,
             "params": [self._param(c, pedal.values[c.key]) if c else None for c in controls],
             "graph": None,
+            # multi-FX (for the chain strip, docs/multifx-design.md §4; older melon-display ignores it)
+            "chain": [{"tag": b.tag, "name": b.short_name, "on": b.on, "sel": i == pedal.cur}
+                      for i, b in enumerate(chain)],
+            "dsp": pedal.dsp() if hasattr(pedal, "dsp") else None,
         }
+        if msg["dsp"]:                       # header "CPU nn%": live JACK load, else the prediction
+            msg["cpu"] = msg["dsp"].get("load", msg["dsp"]["predicted"])
         if self.bands:
             on = [self.bands.index(c) for c in controls if c in self.bands]
             msg["graph"] = {
@@ -88,7 +97,7 @@ class Display:
             rows = [{"n": f"{i + 1:02d}", "name": pl.name, "meta": f"{len(pl.controls)} params",
                      "mark": "✓" if i == pedal.idx else ""} for i, pl in enumerate(pedal.plugins)]
             lst = {"title": "Plugins", "right": f"{len(rows)} installed",
-                   "hints": [["1", "move · back"], ["2", "presets"], ["4", "push: load", True]]}
+                   "hints": [["1", "move · back"], ["3", "push: add block"], ["4", "push: replace", True]]}
         lst.update(rows=rows, selected=pedal.sel)
         self._send({"op": "update", "screen": "list", "list": lst})
 
@@ -155,6 +164,14 @@ class Display:
             "tuner": {"tuning": st["tuning"], "strings": st["strings"], "reference": st["reference"],
                       "mute": st["mute"], "reading": None},
         })
+
+    def dsp_load(self, percent):
+        """Live DSP load for the header ("DSP nn%"); sent about once a second."""
+        self._send({"op": "update", "cpu": round(float(percent))})
+
+    def notice(self, text):
+        """A short message (e.g. a refused chain change). melon-display may not show it yet."""
+        self._send({"op": "notice", "text": str(text)})
 
     def midi(self, connected):
         self.midi_ok = connected
