@@ -113,6 +113,28 @@ data class LoadedPlugin(
     }
 }
 
+/** Wi-Fi of the pedal (NetworkManager on the Pi), see melon_pedald/wifi.py. */
+data class WifiStatus(
+    val device: String?,          // "wlan0", or null when the Pi has no Wi-Fi adapter
+    val connected: Boolean,
+    val ssid: String?,
+    val signal: Int?,             // 0-100
+    val ip: String?,
+    val hostname: String?,
+)
+
+data class WifiNetwork(val ssid: String, val signal: Int, val secure: Boolean, val known: Boolean, val active: Boolean)
+
+data class WifiResult(val ok: Boolean, val msg: String)
+
+data class WifiState(
+    val status: WifiStatus? = null,
+    val saved: List<String> = emptyList(),
+    val networks: List<WifiNetwork>? = null,   // null until the first scan
+    val busy: String? = null,                  // "Scanning…", "Connecting to X…"
+    val result: WifiResult? = null,
+)
+
 data class PedalState(
     val pedalName: String = "Melon Pedal",
     val plugins: List<PluginInfo> = emptyList(),
@@ -130,6 +152,7 @@ data class PedalState(
     val listing: LibListing? = null,          // last folder listing asked for
     val synced: Boolean = false,          // got the first full state after connecting
     val error: String? = null,
+    val wifi: WifiState = WifiState(),
 ) {
     fun slotLabel(slot: Int) = "${slot / bankSize + 1}-${"%02d".format(slot % bankSize + 1)}"
 }
@@ -152,6 +175,38 @@ object Protocol {
         op("lib_list").put("gen", gen).put("i", index).put("folder", folder).toString()
     fun setFile(gen: Int, index: Int, path: String?) =
         op("set_file").put("gen", gen).put("i", index).put("path", path ?: JSONObject.NULL).toString()
+
+    fun wifiStatus() = op("wifi_status").toString()
+    fun wifiScan() = op("wifi_scan").toString()
+    fun wifiConnect(ssid: String, password: String?, hidden: Boolean) =
+        op("wifi_connect").put("ssid", ssid).put("password", password ?: JSONObject.NULL).put("hidden", hidden).toString()
+    fun wifiForget(ssid: String) = op("wifi_forget").put("ssid", ssid).toString()
+
+    private fun optStr(o: JSONObject, key: String): String? = if (o.isNull(key)) null else o.optString(key)
+
+    private fun applyWifi(w: WifiState, o: JSONObject): WifiState {
+        var n = w
+        o.optJSONObject("status")?.let { st ->
+            n = n.copy(status = WifiStatus(
+                device = optStr(st, "device"),
+                connected = st.optBoolean("connected"),
+                ssid = optStr(st, "ssid"),
+                signal = if (st.isNull("signal")) null else st.optInt("signal"),
+                ip = optStr(st, "ip"),
+                hostname = optStr(st, "hostname"),
+            ))
+        }
+        o.optJSONArray("saved")?.let { arr -> n = n.copy(saved = (0 until arr.length()).map { arr.optString(it) }) }
+        o.optJSONArray("networks")?.let { arr ->
+            n = n.copy(networks = (0 until arr.length()).map {
+                val x = arr.getJSONObject(it)
+                WifiNetwork(x.optString("ssid"), x.optInt("signal"), x.optBoolean("secure"), x.optBoolean("known"), x.optBoolean("active"))
+            })
+        }
+        if (o.has("busy")) n = n.copy(busy = optStr(o, "busy"))
+        if (o.has("result")) n = n.copy(result = o.optJSONObject("result")?.let { WifiResult(it.optBoolean("ok"), it.optString("msg")) })
+        return n
+    }
 
     fun cleanName(s: String) = s.filter { it in CHARSET }.take(NAME_LEN)
 
@@ -259,6 +314,7 @@ object Protocol {
                 )
             }
             "bypass" -> s.copy(bypass = o.optBoolean("on"))
+            "wifi" -> s.copy(wifi = applyWifi(s.wifi, o))
             "error" -> s.copy(error = o.optString("msg"))
             else -> s
         }

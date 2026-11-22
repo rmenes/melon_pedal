@@ -13,6 +13,10 @@ JSON lines over TCP, local only (127.0.0.1:5601). One JSON object per line.
     save_preset  {"op":"save_preset","slot":0,"name":"Crunch"}
     lib_list     {"op":"lib_list","gen":3,"i":8,"folder":"Marshall"}  folder of a library control ("" = top)
     set_file     {"op":"set_file","gen":3,"i":8,"path":"Marshall/JCM800.nam"}   path null = no file
+    wifi_status  {"op":"wifi_status"}                        -> ev "wifi" (status, saved)
+    wifi_scan    {"op":"wifi_scan"}                          -> ev "wifi" (busy, then networks)
+    wifi_connect {"op":"wifi_connect","ssid":"Studio","password":"...","hidden":false}
+    wifi_forget  {"op":"wifi_forget","ssid":"Studio"}
 
   pedal -> app   {"ev": ...}
     hello        {"ev":"hello","proto":1,"name":"Melon Pedal","version":"0.3"}
@@ -28,6 +32,8 @@ JSON lines over TCP, local only (127.0.0.1:5601). One JSON object per line.
     bypass       {"ev":"bypass","on":true}
     lib_list     {"ev":"lib_list","gen":3,"i":8,"folder":"Marshall","dirs":[["Plexi",12],...],
                   "files":["JCM800.nam",...],"current":"Marshall/JCM800.nam"|null,"total":24}
+    wifi         {"ev":"wifi","status":{...},"saved":[...],"networks":[...],"busy":"...","result":{"ok","msg"}}
+                 only the fields that changed; see wifi.py. Wi-Fi jobs run on their own thread.
     error        {"ev":"error","msg":"..."}
 
 `gen` goes up every time a plugin is loaded, so a "set" meant for the previous
@@ -42,6 +48,9 @@ import socket
 import threading
 
 from .presets import BANK_SIZE, CHARSET, NAME_LEN, SLOTS
+from .wifi import Wifi
+
+WIFI_OPS = ("wifi_status", "wifi_scan", "wifi_connect", "wifi_forget")
 
 PROTO = 1
 VERSION = "0.3"
@@ -131,6 +140,7 @@ class RemoteHub:
         self._plugin = None          # plugin object last announced
         self._presets_sig = None
         self._mode_sent = None
+        self.wifi = None
 
     # ------------------------------------------------------------------ setup
     def wrap(self, display):
@@ -139,6 +149,7 @@ class RemoteHub:
 
     def start(self, pedal):
         self.pedal = pedal
+        self.wifi = Wifi(lambda m: self.broadcast({"ev": "wifi", **m}))
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         srv.bind(self.addr)
@@ -255,6 +266,8 @@ class RemoteHub:
         except (ValueError, AttributeError):
             return client.send({"ev": "error", "msg": "bad json"})
         p = self.pedal
+        if op in WIFI_OPS:                # slow NetworkManager work: own thread, not under the pedal lock
+            return self.wifi.request(op, msg)
         try:
             with p.lock:
                 if op == "hello":

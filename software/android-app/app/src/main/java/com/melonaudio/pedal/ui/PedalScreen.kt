@@ -62,6 +62,7 @@ fun PedalScreen(vm: PedalViewModel) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var saving by remember { mutableStateOf(false) }
     var browsing by remember { mutableStateOf<Int?>(null) }   // library control whose files are shown
+    var wifiOpen by rememberSaveable { mutableStateOf(false) }
 
     if (!s.synced || s.plugin == null) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -72,8 +73,13 @@ fun PedalScreen(vm: PedalViewModel) {
         return
     }
 
+    if (wifiOpen) {
+        WifiScreen(s.wifi, vm) { wifiOpen = false }
+        return
+    }
+
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        TopBar(s.pedalName) { vm.disconnect() }
+        TopBar(s.pedalName, onWifi = { wifiOpen = true }) { vm.disconnect() }
         PresetBand(s)
         Spacer(Modifier.height(10.dp))
         BypassButton(s.bypass) { vm.toggleBypass() }
@@ -151,11 +157,12 @@ fun PedalScreen(vm: PedalViewModel) {
 }
 
 @Composable
-private fun TopBar(name: String, onDisconnect: () -> Unit) {
+private fun TopBar(name: String, onWifi: () -> Unit, onDisconnect: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(8.dp).background(Melon.lime, CircleShape))
         Spacer(Modifier.width(8.dp))
         Text(name, color = Melon.sage, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        TextButton(onClick = onWifi) { Text("Wi-Fi", color = Melon.lime, fontSize = 13.sp) }
         TextButton(onClick = onDisconnect) { Text("Disconnect", color = Melon.sage, fontSize = 13.sp) }
     }
 }

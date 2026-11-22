@@ -156,6 +156,19 @@ class PedalViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeLibrary() = _state.update { it.copy(listing = null) }
 
+    // ------------------------------------------------------------------ Wi-Fi
+    fun wifiRefresh() = ble.send(Protocol.wifiStatus())
+    fun wifiScan() {
+        _state.update { it.copy(wifi = it.wifi.copy(busy = "Scanning…")) }
+        ble.send(Protocol.wifiScan())
+    }
+    fun wifiConnect(ssid: String, password: String?, hidden: Boolean = false) {
+        _state.update { it.copy(wifi = it.wifi.copy(busy = "Connecting to $ssid…", result = null)) }
+        ble.send(Protocol.wifiConnect(ssid, password?.takeIf { it.isNotEmpty() }, hidden))
+    }
+    fun wifiForget(ssid: String) = ble.send(Protocol.wifiForget(ssid))
+    fun clearWifiResult() = _state.update { it.copy(wifi = it.wifi.copy(result = null)) }
+
     override fun onCleared() {
         ble.close()
     }
