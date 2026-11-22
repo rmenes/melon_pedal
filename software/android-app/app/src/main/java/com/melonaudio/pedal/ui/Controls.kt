@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.melonaudio.pedal.data.ControlDef
 import com.melonaudio.pedal.data.Kind
+import com.melonaudio.pedal.data.LibPath
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -76,7 +77,13 @@ fun ControlCard(
     knob: Int?,                // 1-4 when this parameter is on the pedal's knobs right now
     onChange: (Float) -> Unit,
     onReset: () -> Unit,
+    file: String? = null,      // library controls: the chosen file (path inside the library)
+    onBrowse: () -> Unit = {}, // library controls: open the file browser
 ) {
+    if (def.lib != null) {
+        LibraryCard(def, file, knob, onBrowse)
+        return
+    }
     val typable = def.kind == Kind.FLOAT || def.kind == Kind.INT
     var typing by remember { mutableStateOf(false) }
     Column(
@@ -178,6 +185,42 @@ fun ControlCard(
                 )
             }
         }
+    }
+}
+
+/** Melon NAM model / Melon Cab IR: the file name, its folder, and a button to browse the library. */
+@Composable
+private fun LibraryCard(def: ControlDef, file: String?, knob: Int?, onBrowse: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .background(Melon.surface, RoundedCornerShape(8.dp))
+            .border(1.dp, if (knob != null) Melon.lime.copy(alpha = 0.5f) else Melon.surface, RoundedCornerShape(8.dp))
+            .clickable(onClick = onBrowse)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (knob != null) {
+            Box(
+                Modifier.size(22.dp).border(1.5.dp, Melon.lime, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) { Text("$knob", color = Melon.lime, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+            Spacer(Modifier.width(8.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(def.label, color = Melon.sage, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                LibPath.title(file), color = if (file != null) Melon.lime else Melon.dim,
+                fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+            val folder = LibPath.folder(file)
+            if (folder.isNotEmpty()) {
+                Text(folder, color = Melon.sage, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        OutlinedButton(onClick = onBrowse) { Text("Browse", color = Melon.cream) }
     }
 }
 

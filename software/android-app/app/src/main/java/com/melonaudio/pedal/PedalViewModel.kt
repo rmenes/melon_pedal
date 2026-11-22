@@ -137,6 +137,25 @@ class PedalViewModel(app: Application) : AndroidViewModel(app) {
     fun savePreset(slot: Int, name: String) = ble.send(Protocol.savePreset(slot, Protocol.cleanName(name)))
     fun clearError() = _state.update { it.copy(error = null) }
 
+    // ------------------------------------------------------ NAM / IR library
+    /** Ask the pedal for one folder of the library behind control [i] ("" = top level). */
+    fun openFolder(i: Int, folder: String) {
+        val gen = _state.value.plugin?.gen ?: return
+        _state.update { it.copy(listing = null) }          // show "loading" until the answer arrives
+        ble.send(Protocol.libList(gen, i, folder))
+    }
+
+    /** Load [path] (inside the library; null = no file) into control [i]. */
+    fun chooseFile(i: Int, path: String?) {
+        val gen = _state.value.plugin?.gen ?: return
+        _state.update { st ->
+            st.copy(files = st.files.toMutableList().also { if (i in it.indices) it[i] = path }, listing = null)
+        }
+        ble.send(Protocol.setFile(gen, i, path))
+    }
+
+    fun closeLibrary() = _state.update { it.copy(listing = null) }
+
     override fun onCleared() {
         ble.close()
     }

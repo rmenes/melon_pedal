@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.melonaudio.pedal.PedalViewModel
+import com.melonaudio.pedal.data.LibPath
 import com.melonaudio.pedal.data.PedalState
 import com.melonaudio.pedal.data.Protocol
 import kotlinx.coroutines.delay
@@ -59,6 +61,7 @@ fun PedalScreen(vm: PedalViewModel) {
     val s by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var saving by remember { mutableStateOf(false) }
+    var browsing by remember { mutableStateOf<Int?>(null) }   // library control whose files are shown
 
     if (!s.synced || s.plugin == null) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -76,7 +79,7 @@ fun PedalScreen(vm: PedalViewModel) {
         BypassButton(s.bypass) { vm.toggleBypass() }
         if (s.mode != "play") {
             Text(
-                if (s.mode == "save") "The pedal is on its save screen" else "The pedal is in its preset browser",
+                if (s.mode == "save") "The pedal is on its save screen" else "The pedal is in one of its browsers",
                 color = Melon.amber, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp),
             )
         }
@@ -98,7 +101,10 @@ fun PedalScreen(vm: PedalViewModel) {
         }
         Box(Modifier.weight(1f)) {
             when (tab) {
-                0 -> SoundTab(s, vm)
+                0 -> SoundTab(s, vm, onBrowse = { i ->
+                    browsing = i
+                    vm.openFolder(i, LibPath.folder(s.files.getOrNull(i)))
+                })
                 1 -> PresetsTab(s, vm, onSave = { saving = true })
                 else -> PluginsTab(s, vm)
             }
@@ -112,6 +118,28 @@ fun PedalScreen(vm: PedalViewModel) {
                 msg, color = Melon.ground, fontSize = 13.sp,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
                     .background(Melon.amber, RoundedCornerShape(6.dp)).padding(10.dp),
+            )
+        }
+    }
+
+    browsing?.let { i ->
+        val def = s.plugin?.controls?.getOrNull(i)
+        if (def?.lib == null) {
+            browsing = null                       // another plugin was loaded meanwhile
+        } else {
+            LibraryDialog(
+                title = def.label,
+                listing = s.listing?.takeIf { it.index == i && it.gen == s.plugin?.gen },
+                current = s.files.getOrNull(i),
+                onOpen = { folder -> vm.openFolder(i, folder) },
+                onChoose = { path ->
+                    vm.chooseFile(i, path)
+                    browsing = null
+                },
+                onDismiss = {
+                    vm.closeLibrary()
+                    browsing = null
+                },
             )
         }
     }
@@ -195,7 +223,7 @@ private fun BypassButton(bypassed: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun SoundTab(s: PedalState, vm: PedalViewModel) {
+private fun SoundTab(s: PedalState, vm: PedalViewModel, onBrowse: (Int) -> Unit) {
     val plugin = s.plugin ?: return
     val controls = plugin.controls
     LazyColumn(Modifier.fillMaxSize()) {
@@ -237,6 +265,8 @@ private fun SoundTab(s: PedalState, vm: PedalViewModel) {
                     knob = if (page == s.page) i - from + 1 else null,
                     onChange = { v -> vm.setValue(i, v) },
                     onReset = { vm.resetValue(i) },
+                    file = s.files.getOrNull(i),
+                    onBrowse = { onBrowse(i) },
                 )
             }
         }
@@ -325,6 +355,87 @@ private fun PluginsTab(s: PedalState, vm: PedalViewModel) {
                 color = Melon.dim, fontSize = 12.sp, modifier = Modifier.padding(vertical = 12.dp),
             )
         }
+    }
+}
+
+/** Browse the pedal's NAM / IR library folder by folder and pick a file. */
+@Composable
+private fun LibraryDialog(
+    title: String,
+    listing: com.melonaudio.pedal.data.LibListing?,   // null = waiting for the pedal
+    current: String?,
+    onOpen: (String) -> Unit,
+    onChoose: (String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Melon.surface,
+        title = {
+            Column {
+                Text(title, color = Melon.cream)
+                Text(
+                    listing?.folder?.ifEmpty { null } ?: "Library" + (listing?.let { " · ${it.total} files" } ?: ""),
+                    color = Melon.sage, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                )
+            }
+        },
+        text = {
+            if (listing == null) {
+                Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Melon.lime)
+                }
+            } else {
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 440.dp)) {
+                    if (listing.folder.isNotEmpty()) {
+                        item(key = "up") {
+                            LibraryRow("◂  Up", null, false, dim = true) { onOpen(LibPath.folder(listing.folder)) }
+                        }
+                    } else {
+                        item(key = "none") { LibraryRow("— None —", null, current == null, dim = true) { onChoose(null) } }
+                    }
+                    items(listing.dirs, key = { "d/" + it.first }) { (name, count) ->
+                        LibraryRow("▸  $name", "$count", false) { onOpen(LibPath.join(listing.folder, name)) }
+                    }
+                    items(listing.files, key = { "f/$it" }) { name ->
+                        val path = LibPath.join(listing.folder, name)
+                        LibraryRow(LibPath.title(name), name.substringAfterLast('.', "").uppercase(), path == current) {
+                            onChoose(path)
+                        }
+                    }
+                    if (listing.dirs.isEmpty() && listing.files.isEmpty()) {
+                        item(key = "empty") {
+                            Text(
+                                "No files here. Add them with a USB stick (put_NAM_here / put_IR_here).",
+                                color = Melon.sage, fontSize = 13.sp, modifier = Modifier.padding(8.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+@Composable
+private fun LibraryRow(name: String, meta: String?, selected: Boolean, dim: Boolean = false, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .background(if (selected) Melon.rind else Melon.ground, RoundedCornerShape(6.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            name, color = if (dim) Melon.sage else Melon.cream, fontSize = 15.sp,
+            maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        )
+        if (meta != null) Text(meta, color = Melon.sage, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
+        if (selected) Text("  ✓", color = Melon.lime, fontSize = 15.sp)
     }
 }
 

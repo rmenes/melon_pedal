@@ -11,6 +11,8 @@ JSON lines over TCP, local only (127.0.0.1:5601). One JSON object per line.
     load_plugin  {"op":"load_plugin","i":4}
     load_preset  {"op":"load_preset","slot":0}               0-23
     save_preset  {"op":"save_preset","slot":0,"name":"Crunch"}
+    lib_list     {"op":"lib_list","gen":3,"i":8,"folder":"Marshall"}  folder of a library control ("" = top)
+    set_file     {"op":"set_file","gen":3,"i":8,"path":"Marshall/JCM800.nam"}   path null = no file
 
   pedal -> app   {"ev": ...}
     hello        {"ev":"hello","proto":1,"name":"Melon Pedal","version":"0.3"}
@@ -18,10 +20,14 @@ JSON lines over TCP, local only (127.0.0.1:5601). One JSON object per line.
     presets      {"ev":"presets","bank_size":6,"slots":[null | {"name","plugin_name","plugin"}]}
     plugin       {"ev":"plugin","gen":3,"i":4,"name","uri","controls":[{"l","min","max","d","u","k","log","o"}]}
                  k = "float" | "int" | "toggle" | "enum";  o = [[value,label],...] for enums
+                 lib = "NAM" | "IR" for Melon NAM / Melon Cab file controls (model_index / ir_index)
     state        {"ev":"state","gen":3,"slot":0|null,"edited":bool,"bypass":bool,"page":0,"pages":8,
-                  "mode":"play"|"browse"|"save","values":[...]}
+                  "mode":"play"|"browse"|"save","values":[...],
+                  "files":[null | "Marshall/JCM800.nam", ...]}    chosen file per control (lib controls)
     param        {"ev":"param","gen":3,"i":5,"v":-2.5}       a knob, MIDI or another app moved it
     bypass       {"ev":"bypass","on":true}
+    lib_list     {"ev":"lib_list","gen":3,"i":8,"folder":"Marshall","dirs":[["Plexi",12],...],
+                  "files":["JCM800.nam",...],"current":"Marshall/JCM800.nam"|null,"total":24}
     error        {"ev":"error","msg":"..."}
 
 `gen` goes up every time a plugin is loaded, so a "set" meant for the previous
@@ -49,8 +55,10 @@ def _kind(c):
     return "int" if c.integer else "float"
 
 
-def control_info(c):
+def control_info(c, lib=None):
     d = {"l": c.label, "min": c.minimum, "max": c.maximum, "d": c.default, "k": _kind(c)}
+    if lib:
+        d["lib"] = lib
     if c.unit:
         d["u"] = c.unit
     if c.logarithmic:
@@ -195,14 +203,20 @@ class RemoteHub:
         p = self.pedal
         pl = p.plugin
         return {"ev": "plugin", "gen": self.gen, "i": p.idx, "name": pl.name, "uri": pl.uri,
-                "controls": [control_info(c) for c in pl.controls]}
+                "controls": [control_info(c, self._lib_name(c)) for c in pl.controls]}
+
+    def _lib_name(self, c):
+        from .library import LIB_PARAMS
+        return LIB_PARAMS.get(c.short_id) if self.pedal.lib_of(c) is not None else None
 
     def msg_state(self):
         p = self.pedal
         self._mode_sent = p.mode
         return {"ev": "state", "gen": self.gen, "slot": p.slot, "edited": p.edited,
-                "bypass": p.bypassed, "page": p.page, "pages": p.pages, "mode": p.mode,
-                "values": [p.values.get(c.key, c.default) for c in p.plugin.controls]}
+                "bypass": p.bypassed, "page": p.page, "pages": p.pages,
+                "mode": "browse" if p.mode == "files" else p.mode,
+                "values": [p.values.get(c.key, c.default) for c in p.plugin.controls],
+                "files": [p.files.get(c.key) for c in p.plugin.controls]}
 
     def _sync(self):
         """Called whenever the LCD gets a full page: tell apps what changed."""
@@ -281,6 +295,10 @@ class RemoteHub:
                         client.send({"ev": "error", "msg": "empty slot or plugin missing"})
                 elif op == "save_preset":
                     self._save(msg)
+                elif op == "lib_list":
+                    client.send(self._lib_list(msg))
+                elif op == "set_file":
+                    self._set_file(msg)
                 else:
                     client.send({"ev": "error", "msg": f"unknown op {op!r}"})
         except Exception as e:      # a bad message must never take the pedal down
@@ -300,8 +318,13 @@ class RemoteHub:
         if abs(v - p.values.get(c.key, c.default)) < 1e-9:
             return
         was_edited = p.edited
-        p.values[c.key] = v
-        p.engine.set(c, v)
+        lib = p.lib_of(c)
+        if lib is not None:           # Melon NAM / Melon Cab: the number is a position in the library
+            p.set_file(c, lib.path_at(int(v)) if v >= 0 else None)
+            v = p.values[c.key]
+        else:
+            p.values[c.key] = v
+            p.engine.set(c, v)
         page = p.page_controls()
         if p.mode == "play" and c in page:
             k = page.index(c)
@@ -312,6 +335,40 @@ class RemoteHub:
         if p.edited != was_edited and p.mode == "play":
             p.display.page(p, popup=False)
 
+    def _lib_control(self, msg):
+        p = self.pedal
+        if msg.get("gen", self.gen) != self.gen:
+            raise ValueError("another plugin is loaded now")
+        i = int(msg["i"])
+        controls = p.plugin.controls
+        if not 0 <= i < len(controls) or p.lib_of(controls[i]) is None:
+            raise ValueError("not a library control")
+        return i, controls[i], p.lib_of(controls[i])
+
+    def _lib_list(self, msg):
+        i, c, lib = self._lib_control(msg)
+        folder = str(msg.get("folder") or "").strip("/")
+        if not folder:
+            lib.refresh()                 # top level: pick up files from a USB import
+        dirs, files = lib.list_folder(folder)
+        prefix = folder + "/" if folder else ""
+        counts = [[d, sum(1 for f in lib.files if f.startswith(f"{prefix}{d}/"))] for d in dirs]
+        return {"ev": "lib_list", "gen": self.gen, "i": i, "folder": folder, "dirs": counts, "files": files,
+                "current": self.pedal.files.get(c.key), "total": len(lib.files)}
+
+    def _set_file(self, msg):
+        p = self.pedal
+        i, c, lib = self._lib_control(msg)
+        path = msg.get("path") or None
+        if path is not None and lib.index_of(str(path)) < 0:
+            lib.refresh()
+        code = p.set_file(c, str(path) if path else None)
+        print(f"  {c.label}: {p.files.get(c.key) or 'none'} (app)" + ("" if code >= 0 else f"   ! mod-host error {code}"))
+        if p.mode == "play":
+            p.show_page()                 # LCD + full state to the apps (file name, EDITED)
+        else:
+            self._sync()
+
     def _save(self, msg):
         p = self.pedal
         slot = int(msg["slot"])
@@ -320,7 +377,7 @@ class RemoteHub:
         name = "".join(ch for ch in str(msg.get("name", "")) if ch in CHARSET)    # LCD charset only
         name = " ".join(name.split())[:NAME_LEN].strip()
         name = name or p.plugin.name
-        p.presets.put(slot, name, p.plugin, p.values)
+        p.presets.put(slot, name, p.plugin, p.values, p.files)
         p.slot = slot
         print(f"  saved {slot // BANK_SIZE + 1}-{slot % BANK_SIZE + 1:02d} {name} (app)")
         if p.mode == "play":
@@ -357,4 +414,8 @@ class _HubDisplay:
 
     def save(self, pedal, where):
         self._d.save(pedal, where)
+        self._hub.mode_changed()
+
+    def files(self, pedal):
+        self._d.files(pedal)
         self._hub.mode_changed()

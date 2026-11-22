@@ -26,6 +26,9 @@ data class ControlDef(
     val kind: Kind,
     val log: Boolean,
     val options: List<Choice>,
+    /** "NAM" / "IR": Melon NAM / Melon Cab file control. The value is a position in the
+     *  pedal's library; the app shows and picks the file by name instead (lib_list / set_file). */
+    val lib: String? = null,
 ) {
     /** 0..1 slider position for a value (log scale for frequencies etc.). */
     fun toNorm(v: Float): Float {
@@ -66,6 +69,31 @@ data class ControlDef(
 
 data class PluginInfo(val index: Int, val name: String, val uri: String, val count: Int)
 
+/** One folder of a NAM / IR library, as sent by the pedal (ev "lib_list"). */
+data class LibListing(
+    val gen: Int,
+    val index: Int,                       // control index
+    val folder: String,                   // "" = top level
+    val dirs: List<Pair<String, Int>>,    // sub-folder name, files inside (all levels)
+    val files: List<String>,              // file names in this folder
+    val current: String?,                 // chosen file (path inside the library)
+    val total: Int,
+)
+
+object LibPath {
+    /** "Marshall/JCM800/Crunch.nam" -> "Crunch" */
+    fun title(path: String?): String {
+        if (path.isNullOrEmpty()) return "None"
+        val name = path.substringAfterLast('/')
+        return if ('.' in name) name.substringBeforeLast('.') else name
+    }
+
+    /** "Marshall/JCM800/Crunch.nam" -> "Marshall/JCM800" */
+    fun folder(path: String?): String = if (path != null && '/' in path) path.substringBeforeLast('/') else ""
+
+    fun join(folder: String, name: String) = if (folder.isEmpty()) name else "$folder/$name"
+}
+
 data class PresetInfo(val name: String, val pluginName: String)
 
 data class LoadedPlugin(
@@ -98,6 +126,8 @@ data class PedalState(
     val page: Int = 0,
     val pages: Int = 1,
     val mode: String = "play",
+    val files: List<String?> = emptyList(),   // chosen file per control (library controls only)
+    val listing: LibListing? = null,          // last folder listing asked for
     val synced: Boolean = false,          // got the first full state after connecting
     val error: String? = null,
 ) {
@@ -118,6 +148,10 @@ object Protocol {
     fun loadPlugin(i: Int) = op("load_plugin").put("i", i).toString()
     fun loadPreset(slot: Int) = op("load_preset").put("slot", slot).toString()
     fun savePreset(slot: Int, name: String) = op("save_preset").put("slot", slot).put("name", name).toString()
+    fun libList(gen: Int, index: Int, folder: String) =
+        op("lib_list").put("gen", gen).put("i", index).put("folder", folder).toString()
+    fun setFile(gen: Int, index: Int, path: String?) =
+        op("set_file").put("gen", gen).put("i", index).put("path", path ?: JSONObject.NULL).toString()
 
     fun cleanName(s: String) = s.filter { it in CHARSET }.take(NAME_LEN)
 
@@ -142,8 +176,12 @@ object Protocol {
             },
             log = o.optBoolean("log", false),
             options = opts,
+            lib = o.optString("lib", "").ifEmpty { null },
         )
     }
+
+    private fun strings(arr: JSONArray?): List<String?> =
+        if (arr == null) emptyList() else (0 until arr.length()).map { if (arr.isNull(it)) null else arr.optString(it) }
 
     private fun floats(arr: JSONArray?): List<Float> =
         if (arr == null) emptyList() else (0 until arr.length()).map { arr.optDouble(it, 0.0).toFloat() }
@@ -180,6 +218,8 @@ object Protocol {
                 s.copy(
                     plugin = LoadedPlugin(o.optInt("gen"), o.optInt("i"), o.optString("name"), o.optString("uri"), controls),
                     values = controls.map { it.default },
+                    files = controls.map { null },
+                    listing = null,
                 )
             }
             "state" -> {
@@ -194,6 +234,7 @@ object Protocol {
                     page = o.optInt("page"),
                     pages = o.optInt("pages", 1),
                     mode = o.optString("mode", "play"),
+                    files = if (o.has("files")) strings(o.optJSONArray("files")) else s.files,
                     synced = true,
                 )
             }
@@ -201,6 +242,21 @@ object Protocol {
                 val i = o.optInt("i", -1)
                 if (s.plugin == null || o.optInt("gen") != s.plugin.gen || i !in s.values.indices || keepLocal(i)) s
                 else s.copy(values = s.values.toMutableList().also { it[i] = o.optDouble("v").toFloat() })
+            }
+            "lib_list" -> {
+                if (s.plugin == null || o.optInt("gen") != s.plugin.gen) return s
+                val d = o.optJSONArray("dirs") ?: JSONArray()
+                s.copy(
+                    listing = LibListing(
+                        gen = o.optInt("gen"),
+                        index = o.optInt("i"),
+                        folder = o.optString("folder", ""),
+                        dirs = (0 until d.length()).map { d.getJSONArray(it).let { a -> a.getString(0) to a.optInt(1) } },
+                        files = strings(o.optJSONArray("files")).filterNotNull(),
+                        current = if (o.isNull("current")) null else o.optString("current"),
+                        total = o.optInt("total"),
+                    ),
+                )
             }
             "bypass" -> s.copy(bypass = o.optBoolean("on"))
             "error" -> s.copy(error = o.optString("msg"))

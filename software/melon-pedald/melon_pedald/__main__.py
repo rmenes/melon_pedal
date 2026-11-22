@@ -10,6 +10,9 @@ Footswitch-knobs A-D (play screen):
   hold D     -> preset / plugin browser
 
 Browser:  turn A = move · press A = back · press B/C = presets <-> plugins · press D = load
+Files:    (turning the Library Model / Library IR knob of Melon NAM / Melon Cab opens it)
+          that knob: turn = one by one, press = open folder / choose file
+          press A = up a folder / back, turn A = jump  (B and C instead when it was opened with A)
 Save:     turn A = cursor · turn B = character · turn C = slot · press D = save · press A = cancel
 
 Knobs send absolute values (0-127), so on the play screen a knob only "picks up"
@@ -29,7 +32,7 @@ import sys
 import threading
 import time
 
-from . import catalog, tuner
+from . import catalog, library, tuner
 from .display import Display
 from .engine import FakeEngine, Feedback, ModHost, ModHostError
 from .presets import CHARSET, DEFAULT_PATH, NAME_LEN, SLOTS, PresetStore, label
@@ -72,6 +75,10 @@ class Pedal:
         self.consumed = [False] * 4      # press already used by a hold / mode change
         self.timers = [None] * 4
         self.readout_seen = False        # Melon Tuner: first reading arrived from mod-host
+        self.libs = library.libraries()  # NAM / IR files for Melon NAM / Melon Cab
+        self.files = {}                  # control key -> chosen file (path inside its library)
+        self.fb = None                   # file browser state (mode "files")
+        self.fb_closed = (None, 0.0)     # (knob, time): ignore that knob briefly after choosing
 
     @property
     def plugin(self):
@@ -134,12 +141,56 @@ class Pedal:
         p = self.presets.get(self.slot) if self.slot is not None else None
         if not p:
             return False
-        saved = p.get("values", {})
-        return any(abs(self.values[c.key] - saved.get(c.key, c.default)) > 1e-6
-                   for c in self.plugin.controls)
+        saved, saved_files = p.get("values", {}), p.get("files", {})
+        for c in self.plugin.controls:
+            if self.lib_of(c) is not None:
+                if self.files.get(c.key) != saved_files.get(c.key):
+                    return True
+            elif abs(self.values[c.key] - saved.get(c.key, c.default)) > 1e-6:
+                return True
+        return False
+
+    # --- NAM / IR library (Melon NAM model_index, Melon Cab ir_index) ---
+    def lib_of(self, c):
+        """The Library behind control c, or None for an ordinary control."""
+        if c is None or c.kind != "param":
+            return None
+        kind = library.LIB_PARAMS.get(c.short_id)
+        return self.libs.get(kind) if kind else None
+
+    def lib_text(self, c, value):
+        """What the LCD shows for a library control: the file name ("None" = no file)."""
+        if self.lib_of(c) is None:
+            return None
+        return library.title(self.files.get(c.key)) if value >= 0 else "None"
+
+    def set_file(self, c, rel):
+        """Load `rel` (path inside c's library, None = no file) into the plugin."""
+        lib = self.lib_of(c)
+        idx = lib.index_of(rel) if rel else library.NONE
+        if rel and idx == library.NONE:
+            print(f"! {rel} is not in {lib.root} any more")
+            rel = None
+        if idx >= 0 and abs(self.values.get(c.key, c.default) - idx) < 1e-9:
+            self.engine.set(c, float(library.NONE))   # same number: the plugin only reacts to a change
+        self.values[c.key] = float(idx)
+        self.files[c.key] = rel
+        return self.engine.set(c, float(idx))
+
+    def _apply_files(self, values, files):
+        """After loading a plugin / preset: point the library controls at the preset's files."""
+        lib_controls = [c for c in self.plugin.controls if self.lib_of(c) is not None]
+        for lib in {id(self.lib_of(c)): self.lib_of(c) for c in lib_controls}.values():
+            lib.refresh()
+        for c in lib_controls:
+            rel = (files or {}).get(c.key)
+            if rel is None and values and float(values.get(c.key, -1)) >= 0:
+                rel = self.lib_of(c).path_at(int(float(values[c.key])))   # preset saved before "files"
+            if rel != self.files.get(c.key) or (rel and self.values.get(c.key, -1) < 0):
+                self.set_file(c, rel)
 
     # --- actions ---
-    def load(self, idx, values=None):
+    def load(self, idx, values=None, files=None):
         for attempt in range(len(self.plugins)):
             self.idx = (idx + attempt) % len(self.plugins)
             try:
@@ -152,10 +203,12 @@ class Pedal:
         else:
             raise SystemExit("no plugin could be loaded")
         self.values = {c.key: c.default for c in self.plugin.controls}
+        self.files = {}
         for c in self.plugin.controls:
-            if values and c.key in values:
+            if values and c.key in values and self.lib_of(c) is None:
                 self.values[c.key] = float(values[c.key])
                 self.engine.set(c, self.values[c.key])
+        self._apply_files(values, files)
         self.page = 0
         self.readout_seen = False
         if self.bypassed:
@@ -177,15 +230,18 @@ class Pedal:
         print(f"\n>>> preset {label(slot)} {p['name']}")
         if idx == self.idx and self.engine.loaded is self.plugin:
             for c in self.plugin.controls:      # same plugin: just set the values
+                if self.lib_of(c) is not None:
+                    continue
                 v = float(p["values"].get(c.key, c.default))
                 if abs(v - self.values[c.key]) > 1e-9:
                     self.values[c.key] = v
                     self.engine.set(c, v)
+            self._apply_files(p.get("values"), p.get("files"))
             self.page = 0
             self.release_knobs()
             self.show_page()
         else:
-            self.load(idx, p.get("values"))
+            self.load(idx, p.get("values"), p.get("files"))
         return True
 
     def release_knobs(self):
@@ -199,7 +255,8 @@ class Pedal:
         print(f"--- {pre}{self.plugin.name} | page {self.page + 1}/{self.pages} | {state}")
         for name, c in zip(NAMES, self.page_controls()):
             if c:
-                print(f"  {name}  {c.label:<22} {c.format(self.values[c.key])}")
+                txt = self.lib_text(c, self.values[c.key]) or c.format(self.values[c.key])
+                print(f"  {name}  {c.label:<22} {txt}")
             else:
                 print(f"  {name}  -")
         self.display.page(self)
@@ -210,6 +267,11 @@ class Pedal:
         c = self.page_controls()[k]
         prev, self.last_cc[k] = self.last_cc[k], cc_value
         if c is None:
+            return
+        if self.lib_of(c) is not None:          # Library Model / Library IR: pick a file by name
+            knob, t = self.fb_closed
+            if knob != k or time.time() - t > 0.6:
+                self.open_files(k, c)
             return
         target = cc_value / 127
         current = c.to_norm(self.values[c.key])
@@ -307,6 +369,12 @@ class Pedal:
             else:
                 print(f"  > {self.plugins[self.sel].name}")
             self.display.browser(self)
+        elif self.mode == "files":
+            kind, name = self.fb["rows"][self.sel]
+            where = self.fb["folder"] or "/"
+            shown = {"none": "- none -", "dir": f"[{name}]"}.get(kind, name)
+            print(f"  > {where}: {shown}")
+            self.display.files(self)
         elif self.mode == "save":
             name = "".join(self.save_name)
             old = self.presets.get(self.save_slot)
@@ -316,6 +384,21 @@ class Pedal:
 
     def menu_turn(self, k, v):
         n = v / 128
+        if self.mode == "files":
+            prev, self.last_cc[k] = self.last_cc[k], v
+            rows = self.fb["rows"]
+            if k == self.fb["k"]:                          # the knob that opened it: one row per step
+                if prev is None:
+                    return
+                sel = max(0, min(len(rows) - 1, self.sel + (v - prev)))
+            elif k == self.fb["jump"]:                     # jump through the list
+                sel = int(n * len(rows))
+            else:
+                return
+            if sel != self.sel:
+                self.sel = sel
+                self.show_menu()
+            return
         if self.mode == "browse" and k == 0:
             sel = int(n * len(self.browser_rows()))
             if sel != self.sel:
@@ -333,6 +416,8 @@ class Pedal:
             self.show_menu()
 
     def menu_press(self, k):
+        if self.mode == "files":
+            return self.files_press(k)
         if self.mode == "browse":
             if k == 0:
                 self.back()
@@ -357,10 +442,65 @@ class Pedal:
                 self.back()
             elif k == 3:
                 name = "".join(self.save_name).strip() or self.plugin.name
-                self.presets.put(self.save_slot, name, self.plugin, self.values)
+                self.presets.put(self.save_slot, name, self.plugin, self.values, self.files)
                 self.slot = self.save_slot
                 print(f"  saved {label(self.save_slot)} {name}")
                 self.back()
+
+    # --- file browser (Melon NAM models, Melon Cab IRs) ---
+    def open_files(self, k, c):
+        lib = self.lib_of(c)
+        lib.refresh()                       # pick up files from a USB import
+        cur = self.files.get(c.key)
+        self.mode = "files"
+        # The knob that opened the browser scrolls (turn) and chooses (press).
+        # "Up / back" and "jump" go to A, or to B and C when the browser was opened with A.
+        back, jump = (1, 2) if k == 0 else (0, 0)
+        self.fb = {"k": k, "back": back, "jump": jump, "c": c, "lib": lib,
+                   "folder": library.folder_of(cur), "rows": []}
+        self._fb_list(("file", cur.rsplit("/", 1)[-1]) if cur else ("none", None))
+        print(f"\n[ {c.label} ]  turn {NAMES[k]} = one by one · press {NAMES[k]} = open / choose · "
+              f"press {NAMES[back]} = up / back · turn {NAMES[jump]} = jump")
+        self.show_menu()
+
+    def _fb_list(self, select=None):
+        fb = self.fb
+        dirs, files = fb["lib"].list_folder(fb["folder"])
+        if fb["folder"] and not dirs and not files:     # folder gone (files deleted): back to the top
+            fb["folder"] = ""
+            dirs, files = fb["lib"].list_folder("")
+        rows = [] if fb["folder"] else [("none", None)]
+        rows += [("dir", d) for d in dirs] + [("file", f) for f in files]
+        fb["rows"] = rows
+        self.sel = rows.index(select) if select in rows else 0
+
+    def files_press(self, k):
+        fb = self.fb
+        if k == fb["back"]:                                # up a folder, or back at the top
+            if fb["folder"]:
+                parent, _, name = fb["folder"].rpartition("/")
+                fb["folder"] = parent
+                self._fb_list(("dir", name))
+                self.show_menu()
+            else:
+                self.close_files()
+        elif k == fb["k"]:                                 # open the folder / choose the file
+            kind, name = fb["rows"][self.sel]
+            if kind == "dir":
+                fb["folder"] = f"{fb['folder']}/{name}" if fb["folder"] else name
+                self._fb_list()
+                self.show_menu()
+            else:
+                rel = None if kind == "none" else (f"{fb['folder']}/{name}" if fb["folder"] else name)
+                code = self.set_file(fb["c"], rel)
+                err = "" if code >= 0 else f"   ! mod-host error {code}"
+                print(f"  {fb['c'].label}: {rel or 'none'}{err}")
+                self.close_files()
+
+    def close_files(self):
+        self.fb_closed = (self.fb["k"], time.time())
+        self.fb = None
+        self.back()
 
     def open_save(self):
         self.mode = "save"

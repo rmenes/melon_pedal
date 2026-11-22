@@ -238,11 +238,34 @@ def tile(c, x, y, w, h, p, n, color=LIME):
     fl, fv, fu = font("barlow", 600, 12), font("barlow", 600, 24), font("barlow", 500, 13)
     tx, maxw = x + 56, w - 56 - 6
     c.text(tx, y + h / 2 - 9, c.fit(str(p.get("label", "")).upper(), fl, maxw), fl, SAGE, spacing=0.6)
+    if p.get("kind") == "file":                    # file name: smaller, up to two lines
+        ff = font("barlow", 600, 15)
+        lines = wrap(c, str(p.get("text") or "None"), ff, maxw, 2)
+        for j, line in enumerate(lines):
+            c.text(tx, y + h / 2 + 9 + j * 17, line, ff, CREAM)
+        return
     val, unit = fmt(p)
     val = c.fit(val, fv, maxw - (c.textw(unit, fu) + 2 if unit else 0))
     c.text(tx, y + h / 2 + 15, val, fv, CREAM)
     if unit:
         c.text(tx + c.textw(val, fv) + 2, y + h / 2 + 15, unit, fu, SAGE)
+
+
+def wrap(c, text, f, maxw, max_lines):
+    """Split text into lines that fit maxw; the last line gets "…" if text is left over."""
+    words, lines, cur = text.split(), [], ""
+    for i, wd in enumerate(words):
+        test = f"{cur} {wd}".strip()
+        if c.textw(test, f) <= maxw or not cur:
+            cur = test
+            continue
+        lines.append(cur)
+        cur = wd
+        if len(lines) == max_lines - 1:
+            cur = " ".join(words[i:])
+            break
+    lines.append(cur)
+    return [c.fit(line, f, maxw) for line in lines[:max_lines]]
 
 
 def tiles_grid(c, params, top, bottom, tile_fn=tile):
@@ -368,6 +391,19 @@ def value_popup(c, p, n, fine):
         cw = c.textw("FINE ×10", fc) + 12
         c.rect(x + w - 14 - cw, y + 13, cw, 17, fill=AMBER, r=4)
         c.text(x + w - 14 - cw / 2, y + 25.5, "FINE ×10", fc, GROUND, anchor="ms")
+    if p.get("kind") == "file":                    # Melon NAM / Melon Cab: a file name, not a number
+        val = str(p.get("text") or "None")
+        one = next((px for px in (40, 32, 26) if c.textw(val, font("barlow", 700, px)) <= w - 28), None)
+        if one:
+            c.text(x + w / 2, y + 108, val, font("barlow", 700, one), CREAM, anchor="ms")
+        else:                                      # long name: two lines
+            fv = font("barlow", 700, 24)
+            for j, line in enumerate(wrap(c, val, fv, w - 28, 2)):
+                c.text(x + w / 2, y + 92 + j * 30, line, fv, CREAM, anchor="ms")
+        lo, hi, v = float(p.get("min", -1)), float(p.get("max", 0)), float(p.get("value", -1))
+        if v >= 0:
+            c.text(x + w / 2, y + 150, f"{int(v) + 1} of {int(hi) + 1}", font("barlow", 600, 14), SAGE, anchor="ms")
+        return
     val, unit = fmt(p, fine)
     fv, fu = font("barlow", 700, 68), font("barlow", 600, 26)
     total = c.textw(val, fv) + (c.textw(unit, fu) + 4 if unit else 0)

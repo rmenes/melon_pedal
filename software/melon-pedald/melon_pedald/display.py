@@ -15,6 +15,7 @@ class Display:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setblocking(False)
         self.bands = []            # GraphicEQ-style plugins: controls drawn as a graph
+        self.pedal = None          # set by page(): file names for the Library controls
 
     def _send(self, msg):
         if not self.enabled:
@@ -28,6 +29,7 @@ class Display:
     def page(self, pedal, popup=False):
         """Full state: after loading a plugin or preset, changing page or bypass."""
         plugin = pedal.plugin
+        self.pedal = pedal
         self.tuner_mute = None
         if getattr(pedal, "tuner_visible", False):
             return self._tuner_page(pedal)
@@ -68,7 +70,7 @@ class Display:
             self._send({"op": "tuner", "mute": value >= 0.5 * (control.minimum + control.maximum)})
             return
         p = self._param(control, value)
-        self._send({"op": "param", "index": k, "value": p["value"], "popup": True})
+        self._send({"op": "param", "index": k, "value": p["value"], "text": p.get("text"), "popup": True})
 
     def browser(self, pedal):
         from .presets import SLOTS, BANK_SIZE, BANKS
@@ -88,6 +90,35 @@ class Display:
             lst = {"title": "Plugins", "right": f"{len(rows)} installed",
                    "hints": [["1", "move · back"], ["2", "presets"], ["4", "push: load", True]]}
         lst.update(rows=rows, selected=pedal.sel)
+        self._send({"op": "update", "screen": "list", "list": lst})
+
+    def files(self, pedal):
+        """File browser of Melon NAM / Melon Cab: folders first, then files."""
+        from . import library
+        fb = pedal.fb
+        lib, c = fb["lib"], fb["c"]
+        current = pedal.files.get(c.key)
+        here = fb["folder"]
+        rows = []
+        for kind, name in fb["rows"]:
+            if kind == "none":
+                rows.append({"n": "", "name": "— None —", "empty": True, "mark": "✓" if not current else ""})
+            elif kind == "dir":
+                inside = f"{here}/{name}/" if here else f"{name}/"
+                n = sum(1 for f in lib.files if f.startswith(inside))
+                rows.append({"n": "▸", "name": name, "meta": str(n)})
+            else:
+                rel = f"{here}/{name}" if here else name
+                ext = name.rsplit(".", 1)[-1].upper() if "." in name else ""
+                rows.append({"n": "", "name": library.title(name), "meta": ext,
+                             "mark": "✓" if rel == current else ""})
+        title = here.rsplit("/", 1)[-1] if here else f"{library.LIB_PARAMS.get(c.short_id, '')} library"
+        lst = {"title": title[:22], "right": f"{pedal.sel + 1}/{len(rows)}",
+               "hints": [[str(fb["back"] + 1), "push: up" + (" · jump" if fb["jump"] == fb["back"] else "")],
+                         [str(fb["jump"] + 1), "jump"] if fb["jump"] != fb["back"] else None,
+                         [str(fb["k"] + 1), "turn · push: open", True]],
+               "rows": rows, "selected": pedal.sel}
+        lst["hints"] = [h for h in lst["hints"] if h]
         self._send({"op": "update", "screen": "list", "list": lst})
 
     def save(self, pedal, where):
@@ -154,6 +185,10 @@ class Display:
                 p["kind"] = "int"
         if c in self.bands:
             p["band"] = self.bands.index(c)
+        text = self.pedal.lib_text(c, value) if self.pedal is not None else None
+        if text is not None:                       # Melon NAM / Melon Cab: show the file name
+            n = len(self.pedal.lib_of(c).files)
+            p.update(kind="file", text=text, unit="", min=-1, max=max(0, n - 1))
         return p
 
 

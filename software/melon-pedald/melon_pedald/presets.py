@@ -1,6 +1,8 @@
 """Preset storage: 24 slots (4 banks of 6) in one JSON file.
 
-A preset = plugin URI + parameter values + name. The file is written to a
+A preset = plugin URI + parameter values + name, plus "files": the NAM / IR file of
+Melon NAM / Melon Cab as a path inside the library folder (the index alone would
+point at another file once files are added). The file is written to a
 temporary file first and then renamed, so pulling the plug can't leave a
 half-written file.
 """
@@ -53,11 +55,13 @@ class PresetStore:
     def get(self, slot):
         return self.slots[slot] if 0 <= slot < SLOTS else None
 
-    def put(self, slot, name, plugin, values):
+    def put(self, slot, name, plugin, values, files=None):
         self.slots[slot] = {
             "name": name, "plugin": plugin.uri, "plugin_name": plugin.name,
             "values": dict(values), "saved": time.strftime("%Y-%m-%d %H:%M"),
         }
+        if files:
+            self.slots[slot]["files"] = {k: v for k, v in files.items() if v}
         self.save_file()
 
     def first_empty(self):
