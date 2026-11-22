@@ -26,7 +26,9 @@ JSON lines over TCP, local only (127.0.0.1:5601). One JSON object per line.
 
   pedal -> app   {"ev": ...}
     hello        {"ev":"hello","proto":1,"name":"Melon Pedal","version":"0.3"}
-    plugins      {"ev":"plugins","list":[{"i","name","uri","n"}],"current":i}
+    plugins      {"ev":"plugins","list":[{"i","name","uri","n","cat","tag","cost"(,"cost_light")}],"current":i}
+                 cost = DSP % one new block of it adds before the 1.1 chain factor (Melon NAM: with a model
+                 at Full; cost_light = at Light)
     presets      {"ev":"presets","bank_size":6,"slots":[null | {"name","plugin_name","plugin"}]}
     plugin       {"ev":"plugin","gen":3,"i":4,"name","uri","controls":[{"l","min","max","d","u","k","log","o"}]}
                  k = "float" | "int" | "toggle" | "enum";  o = [[value,label],...] for enums
@@ -34,7 +36,7 @@ JSON lines over TCP, local only (127.0.0.1:5601). One JSON object per line.
     state        {"ev":"state","gen":3,"slot":0|null,"edited":bool,"bypass":bool,"page":0,"pages":8,
                   "mode":"play"|"browse"|"save","values":[...],
                   "files":[null | "Marshall/JCM800.nam", ...],    chosen file per control (lib controls)
-                  "cur":2, "chain":[{"b","i","name","uri","cat","on","cost"}],
+                  "cur":2, "chain":[{"b","i","name","uri","cat","tag","on","cost"}],
                   "dsp":{"predicted","limit","load","peak","xruns"}}   values/files/plugin = selected block;
                                                              i = plugin index; cost and dsp in % of the JACK period
     param        {"ev":"param","gen":3,"i":5,"v":-2.5}       a knob, MIDI or another app moved it
@@ -209,8 +211,18 @@ class RemoteHub:
     def msg_plugins(self):
         p = self.pedal
         return {"ev": "plugins", "current": p.idx,
-                "list": [{"i": i, "name": pl.name, "uri": pl.uri, "n": len(pl.controls)}
-                         for i, pl in enumerate(p.plugins)]}
+                "list": [self._plugin_entry(i, pl) for i, pl in enumerate(p.plugins)]}
+
+    def _plugin_entry(self, i, pl):
+        from .chain import CATEGORY_LABEL, NAM_COST, Block, _slug, category
+        cat = category(pl)
+        d = {"i": i, "name": pl.name, "uri": pl.uri, "n": len(pl.controls), "cat": cat,
+             "tag": CATEGORY_LABEL.get(cat, "FX")}
+        if _slug(pl.uri) == "nam":
+            d.update(cost=NAM_COST["full"], cost_light=NAM_COST["light"])
+        else:
+            d["cost"] = round(self.pedal.costs.cost(Block(pl, inst=-1, values={c.key: c.default for c in pl.controls})), 1)
+        return d
 
     def msg_presets(self):
         slots = []
@@ -244,7 +256,7 @@ class RemoteHub:
         p = self.pedal
         index = {id(pl): i for i, pl in enumerate(p.plugins)}
         return [{"b": n, "i": index.get(id(b.plugin)), "name": b.plugin.name, "uri": b.plugin.uri,
-                 "cat": b.category, "on": b.on, "cost": round(p.costs.cost(b), 1)}
+                 "cat": b.category, "tag": b.tag, "on": b.on, "cost": round(p.costs.cost(b), 1)}
                 for n, b in enumerate(p.chain)]
 
     def _sync(self):

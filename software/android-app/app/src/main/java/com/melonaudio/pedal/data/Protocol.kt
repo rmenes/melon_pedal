@@ -67,7 +67,35 @@ data class ControlDef(
     }
 }
 
-data class PluginInfo(val index: Int, val name: String, val uri: String, val count: Int)
+data class PluginInfo(
+    val index: Int,
+    val name: String,
+    val uri: String,
+    val count: Int,
+    val cat: String = "",            // category: gate, pitch, dynamics, drive, amp, cab, mod, delay, reverb, eq, other
+    val tag: String = "",            // short label as on the LCD chain strip ("DRIVE", "MOD", …)
+    val cost: Float? = null,         // DSP % one new block adds (before the 1.1 chain factor); NAM: at Full
+    val costLight: Float? = null,    // Melon NAM at Model Size Light
+)
+
+/** One block of the multi-FX chain (state.chain), in signal order. */
+data class ChainBlock(
+    val b: Int,                      // position in the chain (0-based)
+    val plugin: Int,                 // index into plugins (-1 = unknown)
+    val name: String,
+    val uri: String,
+    val cat: String,
+    val tag: String,
+    val on: Boolean,
+    val cost: Float,                 // DSP %
+)
+
+/** DSP numbers in % of the JACK period (docs/dsp-budget.md). load/peak/xruns only with the live meter. */
+data class Dsp(val predicted: Float, val limit: Float, val load: Float?, val peak: Float?, val xruns: Int?) {
+    /** What fits: the pedal adds 1.1 x a block's cost to the chain's prediction. */
+    fun fits(cost: Float): Boolean = maxOf(predicted, peak ?: 0f) + 1.1f * cost <= limit
+    val shown: Float get() = load ?: predicted
+}
 
 /** One folder of a NAM / IR library, as sent by the pedal (ev "lib_list"). */
 data class LibListing(
@@ -150,11 +178,17 @@ data class PedalState(
     val mode: String = "play",
     val files: List<String?> = emptyList(),   // chosen file per control (library controls only)
     val listing: LibListing? = null,          // last folder listing asked for
+    val chainSupported: Boolean = false,      // pedal speaks the multi-FX chain API (hello "features")
+    val chain: List<ChainBlock> = emptyList(),
+    val cur: Int = 0,                         // selected block: the one on the knobs and on the Sound tab
+    val dsp: Dsp? = null,
     val synced: Boolean = false,          // got the first full state after connecting
     val error: String? = null,
     val wifi: WifiState = WifiState(),
 ) {
     fun slotLabel(slot: Int) = "${slot / bankSize + 1}-${"%02d".format(slot % bankSize + 1)}"
+
+    val selectedBlock: ChainBlock? get() = chain.getOrNull(cur)
 }
 
 object Protocol {
@@ -175,6 +209,13 @@ object Protocol {
         op("lib_list").put("gen", gen).put("i", index).put("folder", folder).toString()
     fun setFile(gen: Int, index: Int, path: String?) =
         op("set_file").put("gen", gen).put("i", index).put("path", path ?: JSONObject.NULL).toString()
+
+    // multi-FX chain (blocks are 0-based positions)
+    fun addBlock(plugin: Int) = op("add_block").put("i", plugin).toString()
+    fun removeBlock(b: Int) = op("remove_block").put("b", b).toString()
+    fun moveBlock(b: Int, to: Int) = op("move_block").put("b", b).put("to", to).toString()
+    fun blockOn(b: Int, on: Boolean) = op("block_on").put("b", b).put("on", on).toString()
+    fun selectBlock(b: Int) = op("select_block").put("b", b).toString()
 
     fun wifiStatus() = op("wifi_status").toString()
     fun wifiScan() = op("wifi_scan").toString()
@@ -235,6 +276,34 @@ object Protocol {
         )
     }
 
+    private fun optFloat(o: JSONObject, key: String): Float? =
+        if (!o.has(key) || o.isNull(key)) null else o.optDouble(key).toFloat()
+
+    private fun parseChain(arr: JSONArray?): List<ChainBlock> =
+        if (arr == null) emptyList() else (0 until arr.length()).map {
+            val b = arr.getJSONObject(it)
+            ChainBlock(
+                b = b.optInt("b", it),
+                plugin = if (b.isNull("i")) -1 else b.optInt("i", -1),
+                name = b.optString("name"),
+                uri = b.optString("uri"),
+                cat = b.optString("cat"),
+                tag = b.optString("tag").ifEmpty { b.optString("name").removePrefix("Melon ").take(5).uppercase() },
+                on = b.optBoolean("on", true),
+                cost = b.optDouble("cost", 0.0).toFloat(),
+            )
+        }
+
+    private fun parseDsp(o: JSONObject?): Dsp? = o?.let {
+        Dsp(
+            predicted = it.optDouble("predicted", 0.0).toFloat(),
+            limit = it.optDouble("limit", 85.0).toFloat(),
+            load = optFloat(it, "load"),
+            peak = optFloat(it, "peak"),
+            xruns = if (it.has("xruns") && !it.isNull("xruns")) it.optInt("xruns") else null,
+        )
+    }
+
     private fun strings(arr: JSONArray?): List<String?> =
         if (arr == null) emptyList() else (0 until arr.length()).map { if (arr.isNull(it)) null else arr.optString(it) }
 
@@ -249,12 +318,20 @@ object Protocol {
     fun apply(s: PedalState, line: String, keepLocal: (Int) -> Boolean): PedalState {
         val o = try { JSONObject(line) } catch (e: Exception) { return s }
         return when (o.optString("ev")) {
-            "hello" -> s.copy(pedalName = o.optString("name", s.pedalName))
+            "hello" -> {
+                val f = o.optJSONArray("features")
+                val chain = f != null && (0 until f.length()).any { f.optString(it) == "chain" }
+                s.copy(pedalName = o.optString("name", s.pedalName), chainSupported = chain)
+            }
             "plugins" -> {
                 val arr = o.optJSONArray("list") ?: JSONArray()
                 s.copy(plugins = (0 until arr.length()).map {
                     val p = arr.getJSONObject(it)
-                    PluginInfo(p.optInt("i", it), p.optString("name"), p.optString("uri"), p.optInt("n"))
+                    PluginInfo(
+                        p.optInt("i", it), p.optString("name"), p.optString("uri"), p.optInt("n"),
+                        cat = p.optString("cat"), tag = p.optString("tag"),
+                        cost = optFloat(p, "cost"), costLight = optFloat(p, "cost_light"),
+                    )
                 })
             }
             "presets" -> {
@@ -290,6 +367,9 @@ object Protocol {
                     pages = o.optInt("pages", 1),
                     mode = o.optString("mode", "play"),
                     files = if (o.has("files")) strings(o.optJSONArray("files")) else s.files,
+                    chain = if (o.has("chain")) parseChain(o.optJSONArray("chain")) else s.chain,
+                    cur = o.optInt("cur", s.cur),
+                    dsp = if (o.has("dsp")) parseDsp(o.optJSONObject("dsp")) else s.dsp,
                     synced = true,
                 )
             }

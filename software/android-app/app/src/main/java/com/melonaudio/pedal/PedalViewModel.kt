@@ -137,6 +137,27 @@ class PedalViewModel(app: Application) : AndroidViewModel(app) {
     fun savePreset(slot: Int, name: String) = ble.send(Protocol.savePreset(slot, Protocol.cleanName(name)))
     fun clearError() = _state.update { it.copy(error = null) }
 
+    // ------------------------------------------------------ multi-FX chain
+    /** Add plugin [plugin] as a new block; the pedal puts it at its category's place and selects it. */
+    fun addBlock(plugin: Int) = ble.send(Protocol.addBlock(plugin))
+    fun removeBlock(b: Int) = ble.send(Protocol.removeBlock(b))
+    fun moveBlock(b: Int, to: Int) {
+        val n = _state.value.chain.size
+        if (b in 0 until n && to in 0 until n && b != to) ble.send(Protocol.moveBlock(b, to))
+    }
+
+    fun setBlockOn(b: Int, on: Boolean) {
+        _state.update { st ->               // show it at once; the pedal's state confirms it
+            st.copy(chain = st.chain.map { if (it.b == b) it.copy(on = on) else it })
+        }
+        ble.send(Protocol.blockOn(b, on))
+    }
+
+    /** Put block [b] on the pedal's knobs (and on the Sound tab). */
+    fun selectBlock(b: Int) {
+        if (b != _state.value.cur) ble.send(Protocol.selectBlock(b))
+    }
+
     // ------------------------------------------------------ NAM / IR library
     /** Ask the pedal for one folder of the library behind control [i] ("" = top level). */
     fun openFolder(i: Int, folder: String) {

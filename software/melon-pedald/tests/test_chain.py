@@ -229,6 +229,10 @@ class RemoteTest(unittest.TestCase):
 
         send({"op": "hello"})
         until(lambda m: m.get("ev") == "hello" and "chain" in m.get("features", []), "hello")
+        pl = until(lambda m: m.get("ev") == "plugins", "plugins")["list"]
+        nam = pl[IDX["NAM"]]
+        self.assertEqual((nam["cat"], nam["tag"], nam["cost"], nam["cost_light"]), ("amp", "AMP", 41.2, 9.1))
+        self.assertEqual((pl[IDX["Chorus"]]["cost"], pl[IDX["Weird FX"]]["cost"]), (2.1, 10.0))
         st = until(lambda m: m.get("ev") == "state", "state")
         self.assertEqual([c["name"] for c in st["chain"]], ["Melon Dirt"])
         send({"op": "add_block", "i": IDX["Chorus"]})

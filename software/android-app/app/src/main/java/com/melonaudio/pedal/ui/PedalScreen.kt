@@ -59,7 +59,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun PedalScreen(vm: PedalViewModel) {
     val s by vm.state.collectAsStateWithLifecycle()
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var tabName by rememberSaveable { mutableStateOf("Sound") }
     var saving by remember { mutableStateOf(false) }
     var browsing by remember { mutableStateOf<Int?>(null) }   // library control whose files are shown
     var wifiOpen by rememberSaveable { mutableStateOf(false) }
@@ -81,6 +81,7 @@ fun PedalScreen(vm: PedalViewModel) {
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         TopBar(s.pedalName, onWifi = { wifiOpen = true }) { vm.disconnect() }
         PresetBand(s)
+        if (s.chainSupported) ChainStrip(s) { b -> vm.selectBlock(b) }
         Spacer(Modifier.height(10.dp))
         BypassButton(s.bypass) { vm.toggleBypass() }
         if (s.mode != "play") {
@@ -90,6 +91,9 @@ fun PedalScreen(vm: PedalViewModel) {
             )
         }
         Spacer(Modifier.height(8.dp))
+        val titles = if (s.chainSupported) listOf("Chain", "Sound", "Presets", "Plugins")
+                     else listOf("Sound", "Presets", "Plugins")
+        val tab = titles.indexOf(tabName).coerceAtLeast(0)
         TabRow(
             selectedTabIndex = tab,
             containerColor = Melon.ground,
@@ -98,20 +102,24 @@ fun PedalScreen(vm: PedalViewModel) {
                 TabRowDefaults.SecondaryIndicator(Modifier.tabIndicatorOffset(pos[tab]), color = Melon.lime)
             },
         ) {
-            listOf("Sound", "Presets", "Plugins").forEachIndexed { i, title ->
+            titles.forEachIndexed { i, title ->
                 Tab(
-                    selected = tab == i, onClick = { tab = i },
+                    selected = tab == i, onClick = { tabName = title },
                     text = { Text(title, color = if (tab == i) Melon.cream else Melon.sage) },
                 )
             }
         }
         Box(Modifier.weight(1f)) {
-            when (tab) {
-                0 -> SoundTab(s, vm, onBrowse = { i ->
+            when (titles[tab]) {
+                "Chain" -> ChainTab(s, vm, onEdit = { b ->
+                    vm.selectBlock(b)
+                    tabName = "Sound"
+                })
+                "Sound" -> SoundTab(s, vm, onBrowse = { i ->
                     browsing = i
                     vm.openFolder(i, LibPath.folder(s.files.getOrNull(i)))
                 })
-                1 -> PresetsTab(s, vm, onSave = { saving = true })
+                "Presets" -> PresetsTab(s, vm, onSave = { saving = true })
                 else -> PluginsTab(s, vm)
             }
         }
@@ -189,9 +197,11 @@ private fun PresetBand(s: PedalState) {
                 preset?.name ?: s.plugin!!.name, color = Melon.cream, fontSize = 22.sp,
                 fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
+            val block = if (s.chain.size > 1) "${s.cur + 1}/${s.chain.size} · " else ""
+            val off = if (s.selectedBlock?.on == false) " · off" else ""
             Text(
-                if (preset != null) s.plugin!!.name else "not saved",
-                color = Melon.sage, fontSize = 13.sp, maxLines = 1,
+                if (preset != null) block + s.plugin!!.name + off else "${block}not saved$off",
+                color = Melon.sage, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
         if (s.edited) {
@@ -358,7 +368,9 @@ private fun PluginsTab(s: PedalState, vm: PedalViewModel) {
         }
         item {
             Text(
-                "Loading a plugin switches the pedal to dry signal for a moment.",
+                if (s.chainSupported) "Tapping a plugin replaces the selected block (${s.selectedBlock?.name ?: "-"}). " +
+                    "To add one to the chain, use + Add block on the Chain tab."
+                else "Loading a plugin switches the pedal to dry signal for a moment.",
                 color = Melon.dim, fontSize = 12.sp, modifier = Modifier.padding(vertical = 12.dp),
             )
         }
