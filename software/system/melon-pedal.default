@@ -1,8 +1,12 @@
 # Settings for the Melon Pedal services (copied to /etc/default/melon-pedal on first install).
 # After a change: sudo systemctl restart melon-pedal.target
 
-# Audio interface and JACK buffer (same as the manual jackd command)
-JACK_DEVICE=hw:MomixCab
+# Audio interface: "auto" = any class-compliant USB interface (the one plugged in last), else the HiFiBerry.
+# Or a fixed card, e.g. hw:MomixCab. See the cards with: /usr/local/lib/melon-pedal/melon-audio list
+JACK_DEVICE=auto
+# Optional order of preference when several are plugged in (card ids from "melon-audio list"), e.g. Sono,AMS22
+AUDIO_PREFER=
+# JACK defaults; per-interface values go in /etc/melon-pedal/audio.d/<card id>.conf
 JACK_RATE=48000
 JACK_PERIOD=256
 JACK_NPERIODS=3

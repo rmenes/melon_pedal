@@ -30,6 +30,7 @@ Run (with jackd and `mod-host -n -p 5555` already running):
   python3 -m melon_pedald --list
 """
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -775,8 +776,10 @@ def main():
     ap.add_argument("--match", default="melon", help="only cycle through plugins containing this text ('' = all)")
     ap.add_argument("--lv2-dir", action="append", help="LV2 folder to scan (default: ~/.lv2 and system folders)")
     ap.add_argument("--midi-port", default="Nexfoot MIDI:1", help="ALSA MIDI port of the controller")
-    ap.add_argument("--capture", default="system:capture_1", help="JACK input(s), comma separated")
-    ap.add_argument("--playback", default="system:playback_1,system:playback_2", help="JACK outputs")
+    ap.add_argument("--capture", default=os.environ.get("MELON_CAPTURE") or "system:capture_1",
+                    help="JACK input(s), comma separated (default: chosen by melon-audio)")
+    ap.add_argument("--playback", default=os.environ.get("MELON_PLAYBACK") or "system:playback_1,system:playback_2",
+                    help="JACK outputs (default: chosen by melon-audio)")
     ap.add_argument("--turn-cc", default=",".join(map(str, TURN_CC)),
                     help="CC numbers of knobs A,B,C,D when turned (check with aseqdump)")
     ap.add_argument("--press-cc", default=",".join(map(str, PRESS_CC)),

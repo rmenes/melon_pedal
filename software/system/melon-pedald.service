@@ -9,6 +9,8 @@ StartLimitIntervalSec=0
 User=__USER__
 SupplementaryGroups=audio
 EnvironmentFile=/etc/default/melon-pedal
+# audio interface chosen by melon-audio (input/output ports)
+EnvironmentFile=-/run/melon-pedal/audio.env
 Environment=PYTHONUNBUFFERED=1
 WorkingDirectory=__PEDALD_DIR__
 ExecStartPre=/bin/sleep 1
