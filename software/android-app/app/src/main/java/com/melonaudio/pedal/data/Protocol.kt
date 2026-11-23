@@ -163,6 +163,19 @@ data class WifiState(
     val result: WifiResult? = null,
 )
 
+/** One input or output choice of the audio interface (ev "audio"): "In 1", "In 1+2", "Out 3+4"… */
+data class IoOption(val id: String, val label: String, val stereo: Boolean)
+
+/** Inputs / outputs of the interface the pedal runs on (melon_pedald/audio_io.py). */
+data class AudioIo(
+    val card: String,                 // "Sono", "AMS22", "sndrpihifiberry"…
+    val info: String,                 // "USB-Audio - Audient Sono (12 in / 4 out)"
+    val inputs: List<IoOption>,
+    val outputs: List<IoOption>,
+    val input: String,                // id of the input in use
+    val output: String,               // id of the output in use
+)
+
 data class PedalState(
     val pedalName: String = "Melon Pedal",
     val plugins: List<PluginInfo> = emptyList(),
@@ -185,6 +198,8 @@ data class PedalState(
     val synced: Boolean = false,          // got the first full state after connecting
     val error: String? = null,
     val wifi: WifiState = WifiState(),
+    val audioSupported: Boolean = false,      // pedal can choose inputs / outputs (hello "features")
+    val audio: AudioIo? = null,
 ) {
     fun slotLabel(slot: Int) = "${slot / bankSize + 1}-${"%02d".format(slot % bankSize + 1)}"
 
@@ -216,6 +231,13 @@ object Protocol {
     fun moveBlock(b: Int, to: Int) = op("move_block").put("b", b).put("to", to).toString()
     fun blockOn(b: Int, on: Boolean) = op("block_on").put("b", b).put("on", on).toString()
     fun selectBlock(b: Int) = op("select_block").put("b", b).toString()
+
+    fun getAudio() = op("get").put("what", "audio").toString()
+    /** Use input [input] and/or output [output] (ids from AudioIo); null = leave as it is. */
+    fun audioSet(input: String?, output: String?) = op("audio_set").apply {
+        input?.let { put("in", it) }
+        output?.let { put("out", it) }
+    }.toString()
 
     fun wifiStatus() = op("wifi_status").toString()
     fun wifiScan() = op("wifi_scan").toString()
@@ -320,8 +342,9 @@ object Protocol {
         return when (o.optString("ev")) {
             "hello" -> {
                 val f = o.optJSONArray("features")
-                val chain = f != null && (0 until f.length()).any { f.optString(it) == "chain" }
-                s.copy(pedalName = o.optString("name", s.pedalName), chainSupported = chain)
+                val has = { name: String -> f != null && (0 until f.length()).any { f.optString(it) == name } }
+                s.copy(pedalName = o.optString("name", s.pedalName), chainSupported = has("chain"),
+                       audioSupported = has("audio"))
             }
             "plugins" -> {
                 val arr = o.optJSONArray("list") ?: JSONArray()
@@ -392,6 +415,20 @@ object Protocol {
                         total = o.optInt("total"),
                     ),
                 )
+            }
+            "audio" -> {
+                fun opts(arr: JSONArray?) = if (arr == null) emptyList() else (0 until arr.length()).map {
+                    val x = arr.getJSONObject(it)
+                    IoOption(x.optString("id"), x.optString("label"), x.optBoolean("stereo"))
+                }
+                s.copy(audio = AudioIo(
+                    card = o.optString("card"),
+                    info = o.optString("info"),
+                    inputs = opts(o.optJSONArray("inputs")),
+                    outputs = opts(o.optJSONArray("outputs")),
+                    input = o.optString("in"),
+                    output = o.optString("out"),
+                ))
             }
             "bypass" -> s.copy(bypass = o.optBoolean("on"))
             "wifi" -> s.copy(wifi = applyWifi(s.wifi, o))

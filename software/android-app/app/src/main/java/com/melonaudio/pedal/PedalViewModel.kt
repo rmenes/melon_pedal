@@ -177,6 +177,17 @@ class PedalViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeLibrary() = _state.update { it.copy(listing = null) }
 
+    // ------------------------------------------------------- audio interface
+    fun audioRefresh() = ble.send(Protocol.getAudio())
+
+    /** Use input [input] and/or output [output] of the interface (ids from AudioIo). Instant on the pedal. */
+    fun setAudio(input: String? = null, output: String? = null) {
+        _state.update { st ->               // show it at once; the pedal's ev "audio" confirms it
+            st.copy(audio = st.audio?.let { a -> a.copy(input = input ?: a.input, output = output ?: a.output) })
+        }
+        ble.send(Protocol.audioSet(input, output))
+    }
+
     // ------------------------------------------------------------------ Wi-Fi
     fun wifiRefresh() = ble.send(Protocol.wifiStatus())
     fun wifiScan() {

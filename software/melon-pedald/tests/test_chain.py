@@ -301,3 +301,69 @@ class RestoreTest(unittest.TestCase):
         tmp = tempfile.mkdtemp()
         p = self.make(tmp)
         self.assertFalse(p.restore(StateKeeper(os.path.join(tmp, "none.json"), p).read()))
+
+
+class AudioIoTest(unittest.TestCase):
+    """Choosing inputs / outputs of a multi-channel interface (pedal menu and app)."""
+
+    def setUp(self):
+        from melon_pedald import audio_io
+        self.audio_io = audio_io
+        self._counts = audio_io.jack_counts
+        audio_io.jack_counts = lambda a=2, b=2: (12, 4)          # Audient Sono: 12 in / 4 out
+        os.environ["MELON_CARD"] = "Sono"
+        self.tmp = tempfile.mkdtemp()
+        self.engine = Recorder()
+        self.pedal = Pedal(self.engine, PLUGINS, ["system:capture_1"], ["system:playback_1", "system:playback_2"],
+                           Display(enabled=False), PresetStore(os.path.join(self.tmp, "p.json")), costs(COSTS))
+        self.pedal.ports = audio_io.PortStore(os.path.join(self.tmp, "ports.json"))
+        self.pedal.load(IDX["Chorus"])
+
+    def tearDown(self):
+        self.audio_io.jack_counts = self._counts
+        os.environ.pop("MELON_CARD", None)
+
+    def test_options(self):
+        ins, outs = self.pedal.io_options()
+        self.assertEqual([o["id"] for o in ins][:3], ["1", "2", "3"])
+        self.assertIn("11+12", [o["id"] for o in ins])
+        self.assertEqual(len(ins), 12 + 6)
+        self.assertEqual([o["id"] for o in outs], ["1+2", "3+4", "1", "2", "3", "4"])
+        self.assertEqual(self.pedal.io_current(), ("1", "1+2"))
+
+    def test_set_io_relinks_and_remembers_per_interface(self):
+        p = self.pedal
+        fx = f"effect_{p.chain[0].inst}"
+        p.set_io("3+4", "3+4")
+        self.assertIn(("system:capture_3", f"{fx}:in_1"), self.engine.links)
+        self.assertIn(("system:capture_4", f"{fx}:in_2"), self.engine.links)
+        self.assertIn((f"{fx}:out_2", "system:playback_4"), self.engine.links)
+        self.assertNotIn(("system:capture_1", f"{fx}:in_1"), self.engine.links)
+        cap, pb = p.ports.get("Sono")
+        self.assertEqual(cap, ["system:capture_3", "system:capture_4"])
+        self.assertEqual(pb, ["system:playback_3", "system:playback_4"])
+        self.assertEqual(p.ports.get("AMS22"), (None, None))   # other interfaces keep their own
+        with self.assertRaises(ChainError):
+            p.set_io("13")
+
+    def test_pedal_menu_audio_tab(self):
+        p = self.pedal
+        p.open_browser()
+        p.menu_press(1)                 # presets -> plugins
+        p.menu_press(1)                 # plugins -> audio
+        self.assertEqual(p.tab, "audio")
+        self.assertEqual(p.io_rows[p.sel][1]["id"], "1")          # starts on the current input
+        out_row = next(n for n, (k, o) in enumerate(p.io_rows) if k == "out" and o["id"] == "3")
+        p.sel = out_row
+        p.menu_press(3)                 # use Out 3 (mono)
+        self.assertEqual(p.playback, ["system:playback_3"])
+        self.assertEqual(p.mode, "browse")                        # stays in the list to pick more
+        p.menu_press(1)                 # audio -> presets
+        self.assertEqual(p.tab, "presets")
+
+    def test_remote_audio(self):
+        hub = RemoteHub(port=0)
+        hub.pedal = self.pedal
+        m = hub.msg_audio()
+        self.assertEqual((m["card"], m["in"], m["out"]), ("Sono", "1", "1+2"))
+        self.assertEqual(len(m["inputs"]), 18)

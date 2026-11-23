@@ -93,11 +93,21 @@ class Display:
                              "mark": "▶" if i == pedal.slot else ""})
             lst = {"title": "Presets", "right": f"BANK {pedal.sel // BANK_SIZE + 1} of {BANKS}",
                    "hints": [["1", "move · back"], ["2", "plugins"], ["4", "push: load", True]]}
+        elif pedal.tab == "audio":
+            from . import audio_io
+            cur_in, cur_out = pedal.io_current()
+            rows = [{"n": "IN" if kind == "in" else "OUT", "name": o["label"],
+                     "meta": "stereo" if o["stereo"] else "mono",
+                     "mark": "✓" if o["id"] == (cur_in if kind == "in" else cur_out) else ""}
+                    for kind, o in pedal.io_rows]
+            lst = {"title": "Audio I/O", "right": audio_io.card()[:14],
+                   "hints": [["1", "move · back"], ["2", "presets"], ["4", "push: use", True]]}
         else:
             rows = [{"n": f"{i + 1:02d}", "name": pl.name, "meta": f"{len(pl.controls)} params",
                      "mark": "✓" if i == pedal.idx else ""} for i, pl in enumerate(pedal.plugins)]
             lst = {"title": "Plugins", "right": f"{len(rows)} installed",
-                   "hints": [["1", "move · back"], ["3", "push: add block"], ["4", "push: replace", True]]}
+                   "hints": [["1", "move · back"], ["2", "audio"], ["3", "push: add block"],
+                             ["4", "push: replace", True]]}
         lst.update(rows=rows, selected=pedal.sel)
         self._send({"op": "update", "screen": "list", "list": lst})
 
@@ -168,6 +178,9 @@ class Display:
     def dsp_load(self, percent):
         """Live DSP load for the header ("DSP nn%"); sent about once a second."""
         self._send({"op": "update", "cpu": round(float(percent))})
+
+    def audio(self, pedal):
+        """Inputs / outputs changed (the list screen is redrawn by browser(); apps get ev "audio")."""
 
     def notice(self, text):
         """A short message (e.g. a refused chain change). melon-display may not show it yet."""
