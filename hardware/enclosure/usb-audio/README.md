@@ -24,7 +24,7 @@ Concept renders: [hero](render-poc-hero.png) · [back](render-poc-back.png) · [
   along the left wall. Board on 3 mm standoffs.
 - **Back wall:** open cut-out for the 4 USB ports + Ethernet (audio interface and boot drive plug in here).
 - **Right wall:** open cut-out for USB-C power + both micro-HDMI; vents in the rear half.
-- **Left wall and plate:** vents (wall slots are plain rectangles so they print without supports: their top is a 2.6 mm bridge) (plate slots under the SoC). No room for a fan: use a heatsink and check
+- **Left wall and plate:** vents (wall slots have 45° pointed ends, so they print without supports or bridges) (plate slots under the SoC). No room for a fan: use a heatsink and check
   `vcgencmd measure_temp` under a full chain.
 
 ## Assembly

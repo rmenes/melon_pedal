@@ -84,8 +84,8 @@ BACK_CUT = (-27.5, 27.5, Z_PI_TOP + 16.0 + 1.6)          # x0, x1, top z: 4 x US
 RIGHT_CUT = (PI_Y0 + 3.0, PI_Y0 + 48.0, Z_PI_TOP + 6.0)  # y0, y1, top z: USB-C + 2 x micro-HDMI
 
 # --- vents (vertical slots / plate slots) -----------------------------------
-# Wall slots are plain rectangles: with the shell upside down their top edge is a short
-# flat bridge (VENT_W), which prints without supports (rounded ends would be overhangs).
+# Wall slots have 45-degree pointed ends (user's v2, 2026-11-22): with the shell upside down
+# every edge is self-supporting, so no supports and no bridges (rounded ends need supports).
 VENT_W = 2.6
 LEFT_VENTS_Y = [-45.0 + 5.0 * i for i in range(13)]       # y = -45 .. 15
 LEFT_VENT_Z = (12.0, 31.0)
@@ -128,6 +128,12 @@ def arc_band(cx, cy, r_in, r_out, a0, a1):
     outer = np.c_[cx + r_out * np.cos(t), cy + r_out * np.sin(t)]
     inner = np.c_[cx + r_in * np.cos(t[::-1]), cy + r_in * np.sin(t[::-1])]
     return np.vstack([outer, inner])
+
+
+def pointed_slot(a, b0, b1, w):
+    """Vertical slot at a, from b0 to b1, width w, with 45-degree pointed ends (print without supports)."""
+    h = w / 2
+    return np.array([(a, b0), (a + h, b0 + h), (a + h, b1 - h), (a, b1), (a - h, b1 - h), (a - h, b0 + h)], float)
 
 
 def notched(a0, a1, b1, notches):
@@ -299,10 +305,10 @@ def shell():
     # right wall (normal +x, a = y): USB-C + HDMI cut-out, vents in the rear half
     span_y = HL - R_CORNER + EPS
     y0, y1, ztop = RIGHT_CUT
-    vents = [rect(y - VENT_W / 2, RIGHT_VENT_Z[0], y + VENT_W / 2, RIGHT_VENT_Z[1]) for y in RIGHT_VENTS_Y]
+    vents = [pointed_slot(y, *RIGHT_VENT_Z, VENT_W) for y in RIGHT_VENTS_Y]
     part.add(extrude([notched(-span_y, span_y, zt, [(y0, y1, ztop)])] + vents, HW - WALL, HW, Frame((1, 0, 0))))
     # left wall (normal -x, a = -y): vents
-    vents = [rect(-y - VENT_W / 2, LEFT_VENT_Z[0], -y + VENT_W / 2, LEFT_VENT_Z[1]) for y in LEFT_VENTS_Y]
+    vents = [pointed_slot(-y, *LEFT_VENT_Z, VENT_W) for y in LEFT_VENTS_Y]
     part.add(extrude([rect(-span_y, 0, span_y, zt)] + vents, HW - WALL, HW, Frame((-1, 0, 0))))
     # rounded corners
     for sx, sy, a0 in ((1, 1, 0), (-1, 1, 90), (-1, -1, 180), (1, -1, 270)):
