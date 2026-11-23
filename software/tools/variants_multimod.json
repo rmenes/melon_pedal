@@ -1,0 +1,121 @@
+[
+ {
+  "uri": "melon-multimod",
+  "label": "Chorus (Classic)",
+  "params": {
+   "machine": 0,
+   "param1": 10
+  }
+ },
+ {
+  "uri": "melon-multimod",
+  "label": "Chorus (Multi)",
+  "params": {
+   "machine": 0,
+   "param1": 90
+  }
+ },
+ {
+  "uri": "melon-multimod",
+  "label": "Flanger",
+  "params": {
+   "machine": 1
+  }
+ },
+ {
+  "uri": "melon-multimod",
+  "label": "Rotary",
+  "params": {
+   "machine": 2
+  }
+ },
+ {
+  "uri": "melon-multimod",
+  "label": "Vibe",
+  "params": {
+   "machine": 3
+  }
+ },
+ {
+  "uri": "melon-multimod",
+  "label": "Phaser 4 stages",
+  "params": {
+   "machine": 4,
+   "param1": 25
+  }
+ },
+ {
+  "uri": "melon-multimod",
+  "label": "Phaser 16 stages",
+  "params": {
+   "machine": 4,
+   "param1": 99
+  }
+ },
+ {
+  "uri": "melon-multimod",
+  "label": "Filter",
+  "params": {
+   "machine": 5
+  }
+ },
+ {
+  "uri": "melon-multimod",
+  "label": "Formant",
+  "params": {
+   "machine": 6
+  }
+ },
+ {
+  "uri": "melon-multimod",
+  "label": "Vintage Trem",
+  "params": {
+   "machine": 7
+  }
+ },
+ {
+  "uri": "melon-multimod",
+  "label": "Pattern Trem",
+  "params": {
+   "machine": 8
+  }
+ },
+ {
+  "uri": "melon-multimod",
+  "label": "Autoswell",
+  "params": {
+   "machine": 9
+  }
+ },
+ {
+  "uri": "melon-multimod",
+  "label": "Destroyer",
+  "params": {
+   "machine": 10
+  }
+ },
+ {
+  "uri": "melon-multimod",
+  "label": "Quadrature AM",
+  "params": {
+   "machine": 11,
+   "param1": 10
+  }
+ },
+ {
+  "uri": "melon-multimod",
+  "label": "Quadrature FM",
+  "params": {
+   "machine": 11,
+   "param1": 35
+  }
+ },
+ {
+  "uri": "melon-multimod",
+  "label": "Quadrature Shift Up",
+  "params": {
+   "machine": 11,
+   "param1": 60
+  }
+ }
+]

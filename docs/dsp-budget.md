@@ -127,3 +127,36 @@ Two runs of the full chain agreed within 0.3 %. No xruns, even at 86 %.
 - **Optimize Muffs (26 %), Reverberare (16 %) and Comp (8 %)**: check oversampling and per-sample work first; consider mono processing for blocks that sit before the first stereo effect.
 - Measure again at **128 frames** (lower latency) and with the **final interface** (iOne or HiFiBerry).
 - Re-check temperature with the Pi **inside the enclosure** under a full chain (69 °C already on the open bench).
+
+## 8. Melon MultiMod (estimated 2026-11-23, to be measured)
+
+Melon MultiMod (melon_plugins 1.2.3) has 12 machines; only the selected one runs, so its cost depends on the **Machine** parameter. Not benched on the Pi yet; the numbers below are an estimate.
+
+**Method:** the DSP engines (`*Dsp.h`, without JUCE) of MultiMod and of 11 plugins already measured on the Pi (§2) were timed on an x86 desktop with the same harness (stereo, 48 kHz, 256-sample blocks, guitar-like test signal). Pi cost vs x86 time fits a straight line, **Pi % ≈ 0.2 + 4.45 × x86 %**, within 0.3 % for Chorus, Flanger, Dirt, Comp, Reverberare, Gates of Doom, Delay 2290, Shifter, Multi Delay and Simple Gate. Muffs doesn't fit (its maths runs relatively faster on the Pi), so it was left out.
+
+| Machine | Estimated cost on the Pi |
+|---|---:|
+| Pattern Trem | 1.5 % |
+| Quadrature (AM) | 1.6 % |
+| Autoswell | 1.8 % |
+| Quadrature (Shift Up / Down) | 2.1 % |
+| Quadrature (FM) | 2.5 % |
+| **Chorus, Classic (default)** | **2.9 %** |
+| Flanger, Phaser (4 stages), Filter, Vintage Trem, Destroyer | 3.4–3.5 % |
+| Rotary | 4.8 % |
+| Phaser (16 stages) | 5.3 % |
+| Chorus, Multi (3 voices) | 6.0 % |
+| Vibe | 7.0 % |
+| **Formant** | **8.3 %** (heaviest) |
+
+- At its defaults MultiMod costs about as much as Chorus + Flanger together; at worst (Formant) about as much as Comp.
+- The pedal's cost table keeps the **highest** variant per plugin, so after the bench MultiMod will count as ≈ 8.3 % in the DSP check (a machine can be switched without re-checking). Until then it uses the default for unknown plugins, 10 %, which is on the safe side.
+- In the §4 chain with NAM at Light (≈ 50 %), MultiMod adds at most ≈ 9 % (1.1 × 8.3): still well under the 85 % limit.
+
+The estimate harness is in `software/tools/dsp_estimate/`.
+
+**To measure it on the Pi** (stop the pedal programs first, as in §1):
+
+```bash
+python3 -u dsp_bench.py --variants variants_multimod.json --out ~/plugin_costs.json | tee bench_multimod.txt
+```
