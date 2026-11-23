@@ -63,14 +63,7 @@ class PresetStore:
 
     def put(self, slot, name, blocks, cur=0):
         """Save a chain (list of chain.Block) as preset `slot`."""
-        chain = []
-        for b in blocks:
-            entry = {"plugin": b.plugin.uri, "plugin_name": b.plugin.name,
-                     "values": dict(b.values), "on": bool(b.on)}
-            files = {k: v for k, v in b.files.items() if v}
-            if files:
-                entry["files"] = files
-            chain.append(entry)
+        chain = chain_entries(blocks)
         self.slots[slot] = {
             "name": name, "chain": chain, "cur": int(cur),
             "plugin": chain[0]["plugin"] if chain else "", "plugin_name": summary(chain),
@@ -80,6 +73,19 @@ class PresetStore:
 
     def first_empty(self):
         return next((i for i, p in enumerate(self.slots) if p is None), None)
+
+
+def chain_entries(blocks):
+    """Blocks (list of chain.Block) -> the "chain" list stored in presets and in the live state."""
+    chain = []
+    for b in blocks:
+        entry = {"plugin": b.plugin.uri, "plugin_name": b.plugin.name,
+                 "values": dict(b.values), "on": bool(b.on)}
+        files = {k: v for k, v in b.files.items() if v}
+        if files:
+            entry["files"] = files
+        chain.append(entry)
+    return chain
 
 
 def chain_of(preset):

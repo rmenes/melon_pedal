@@ -43,7 +43,8 @@ from .chain import (CHAIN_FACTOR, LIMIT, MAX_BLOCKS, NAM_COST, Block, CostTable,
                     open_meter)
 from .display import Display
 from .engine import FakeEngine, Feedback, ModHost, ModHostError
-from .presets import CHARSET, DEFAULT_PATH, NAME_LEN, SLOTS, PresetStore, chain_of, label
+from .presets import CHARSET, DEFAULT_PATH, NAME_LEN, SLOTS, PresetStore, chain_entries, chain_of, label
+from .state import STATE_PATH, StateKeeper
 from .remote import RemoteHub
 
 TURN_CC = [57, 68, 74, 89]     # NexFoot A, B, C, D (turn)
@@ -334,14 +335,35 @@ class Pedal:
         p = self.presets.get(slot)
         if not p:
             return False
+        return self._apply_sound(p, slot, f"preset {label(slot)} {p['name']}")
+
+    def snapshot(self):
+        """The live sound (chain, values, selected block, bypass, preset it came from): see state.py."""
+        return {"slot": self.slot, "cur": self.cur, "bypassed": self.bypassed,
+                "chain": chain_entries(self.chain)}
+
+    def restore(self, state):
+        """Bring back a snapshot() (after a restart: new audio interface, crash, reboot)."""
+        if not state or not state.get("chain"):
+            return False
+        slot = state.get("slot")
+        if not (isinstance(slot, int) and self.presets.get(slot)):
+            slot = None
+        if not self._apply_sound(state, slot, "last sound (restored)"):
+            return False
+        if state.get("bypassed"):
+            self.set_bypass(True)
+        return True
+
+    def _apply_sound(self, p, slot, title):
         entries = chain_of(p)
         by_uri = {pl.uri: pl for pl in self.plugins}
         missing = [e.get("plugin_name") or e["plugin"] for e in entries if e["plugin"] not in by_uri]
         if missing or not entries:
-            print(f"! preset {label(slot)} needs {', '.join(missing) or 'a plugin'}, which is not installed")
+            print(f"! {title} needs {', '.join(missing) or 'a plugin'}, which is not installed")
             return False
         self.slot = slot
-        print(f"\n>>> preset {label(slot)} {p['name']}  ({len(entries)} block{'s' if len(entries) > 1 else ''})")
+        print(f"\n>>> {title}  ({len(entries)} block{'s' if len(entries) > 1 else ''})")
         if [b.plugin.uri for b in self.chain] == [e["plugin"] for e in entries]:
             for b, e in zip(self.chain, entries):     # same chain: just set the values (no gap)
                 saved = e.get("values", {})
@@ -790,6 +812,8 @@ def main():
     ap.add_argument("--feedback-port", type=int, default=0,
                     help="mod-host feedback port (default: --port + 1, i.e. mod-host -f 5556)")
     ap.add_argument("--presets", default=DEFAULT_PATH, help="preset file")
+    ap.add_argument("--state", default=STATE_PATH,
+                    help="file that keeps the live sound across restarts ('' = start fresh every time)")
     ap.add_argument("--costs", default=None,
                     help="DSP cost table from dsp_bench.py (default: /data/plugin_costs.json, then ~/plugin_costs.json)")
     ap.add_argument("--no-dsp-meter", action="store_true",
@@ -862,9 +886,14 @@ def main():
     print(f"{sum(1 for p in store.slots if p)} presets in {args.presets}")
     print(f"press: A = bypass, B = next page, C = block on/off, D = next plugin | "
           f"hold B = next block, hold C = save, hold D = presets   (press CCs A-D: {PRESS_CC})")
+    keeper = StateKeeper(args.state, pedal) if args.state and not args.fake else None
     with pedal.lock:
-        if not (args.preset and pedal.load_preset(args.preset - 1)):
+        if args.preset and pedal.load_preset(args.preset - 1):
+            pass
+        elif args.plugin or not (keeper and pedal.restore(keeper.read())):
             pedal.load(start)
+    if keeper:
+        keeper.start()
 
     if meter:
         def dsp_header():

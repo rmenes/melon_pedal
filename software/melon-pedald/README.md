@@ -23,6 +23,11 @@ If a knob does the wrong thing, check which CC it really sends with
 The NexFoot sends value 0 when a knob is pressed and 127 when it is released; for a controller that does the opposite, add `--press-high`.
 
 Presets are kept in `~/.config/melon-pedald/presets.json` (change with `--presets`).
+
+**Last sound:** the live sound (chain, values, selected block, bypass, and the preset it came from, unsaved edits included)
+is saved to `~/.config/melon-pedald/state.json` a couple of seconds after it changes. When the controller restarts
+(audio interface plugged in or removed, crash, reboot) it comes back exactly as it was. `--preset N` or `--plugin X`
+start with that instead; `--state ''` turns this off.
 `--preset 3` starts with preset 3. The screen shows **EDITED** when you change a loaded preset.
 
 Knobs "pick up" a parameter once they pass its current value (no jumps);

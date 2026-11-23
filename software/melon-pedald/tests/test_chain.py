@@ -258,3 +258,46 @@ class RemoteTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RestoreTest(unittest.TestCase):
+    """The live sound survives a controller restart (new audio interface, crash, reboot)."""
+
+    def make(self, tmp):
+        store = PresetStore(os.path.join(tmp, "presets.json"))
+        return Pedal(Recorder(), PLUGINS, ["system:capture_1"], ["system:playback_1", "system:playback_2"],
+                     Display(enabled=False), store, costs(COSTS))
+
+    def test_restart_keeps_chain_values_preset_and_edits(self):
+        from melon_pedald.state import StateKeeper
+        tmp = tempfile.mkdtemp()
+        path = os.path.join(tmp, "state.json")
+        a = self.make(tmp)
+        a.load(IDX["Dirt"])
+        a.add_block(IDX["Chorus"])
+        a.add_block(IDX["Delay 2290"])
+        a.save_preset(4, "Big Test")
+        mix = a.chain[1].plugin.controls[1]
+        a.chain[1].values[mix.key] = 77.0                         # edited after saving
+        a.chain[2].on = False
+        a.select_block(1)
+        a.set_bypass(True)
+        keeper = StateKeeper(path, a)
+        self.assertTrue(keeper.save_now())
+        self.assertFalse(keeper.save_now())                       # unchanged: no second write
+
+        b = self.make(tmp)                                        # "restarted" controller
+        self.assertTrue(b.restore(StateKeeper(path, b).read()))
+        self.assertEqual([x.short_name for x in b.chain], ["Dirt", "Chorus", "Delay 2290"])
+        self.assertEqual(b.chain[1].values[mix.key], 77.0)
+        self.assertFalse(b.chain[2].on)
+        self.assertEqual(b.slot, 4)
+        self.assertTrue(b.edited)
+        self.assertEqual(b.cur, 1)
+        self.assertTrue(b.bypassed)
+
+    def test_no_state_file(self):
+        from melon_pedald.state import StateKeeper
+        tmp = tempfile.mkdtemp()
+        p = self.make(tmp)
+        self.assertFalse(p.restore(StateKeeper(os.path.join(tmp, "none.json"), p).read()))
