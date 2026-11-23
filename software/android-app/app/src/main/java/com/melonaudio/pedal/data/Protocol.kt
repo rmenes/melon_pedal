@@ -149,6 +149,7 @@ data class WifiStatus(
     val signal: Int?,             // 0-100
     val ip: String?,
     val hostname: String?,
+    val user: String? = null,     // account on the pedal, for "ssh user@ip"
 )
 
 data class WifiNetwork(val ssid: String, val signal: Int, val secure: Boolean, val known: Boolean, val active: Boolean)
@@ -257,6 +258,7 @@ object Protocol {
                 signal = if (st.isNull("signal")) null else st.optInt("signal"),
                 ip = optStr(st, "ip"),
                 hostname = optStr(st, "hostname"),
+                user = optStr(st, "user"),
             ))
         }
         o.optJSONArray("saved")?.let { arr -> n = n.copy(saved = (0 until arr.length()).map { arr.optString(it) }) }

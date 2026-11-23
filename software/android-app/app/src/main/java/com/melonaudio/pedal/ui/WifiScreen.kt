@@ -34,6 +34,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -205,15 +208,48 @@ private fun StatusCard(w: WifiState) {
                 Text("CONNECTED", color = Melon.lime, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                 Text(st.ssid ?: "(network)", color = Melon.cream, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    listOfNotNull(st.ip, st.hostname?.let { "$it.local" }, st.signal?.let { "signal $it%" }).joinToString(" · "),
+                    listOfNotNull(st.hostname?.let { "$it.local" }, st.signal?.let { "signal $it%" }).joinToString(" · "),
                     color = Melon.sage, fontSize = 13.sp,
                 )
+                st.ip?.let { ip -> IpRow(ip, st.user) }
             }
             else -> {
                 Text("NOT CONNECTED", color = Melon.amber, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                 Text("Pick a network below.", color = Melon.cream, fontSize = 16.sp)
             }
         }
+    }
+}
+
+/** The pedal's IPv4 address, big, with the ssh command; tap to copy it (for SSH from a computer). */
+@Composable
+private fun IpRow(ip: String, user: String?) {
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    val ssh = if (user.isNullOrEmpty()) "ssh $ip" else "ssh $user@$ip"
+    if (copied) {
+        LaunchedEffect(Unit) {
+            delay(2000)
+            copied = false
+        }
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp)
+            .background(Melon.surfaceHigh, RoundedCornerShape(6.dp))
+            .clickable {
+                clipboard.setText(AnnotatedString(ssh))
+                copied = true
+            }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Text("IPv4 ADDRESS", color = Melon.sage, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+        Text(ip, color = Melon.cream, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
+        Text(
+            if (copied) "Copied: $ssh" else "$ssh  ·  tap to copy",
+            color = if (copied) Melon.lime else Melon.sage, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+        )
     }
 }
 

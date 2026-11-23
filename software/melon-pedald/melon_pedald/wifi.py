@@ -9,13 +9,15 @@ The pedal's user needs permission to manage NetworkManager without sudo:
 software/system/setup-wifi-control.sh installs a polkit rule for the `netdev` group.
 
   ev "wifi" fields (each message carries the ones that changed):
-    status   {"device":"wlan0"|null,"connected":bool,"ssid","signal":0-100,"ip","hostname"}
+    status   {"device":"wlan0"|null,"connected":bool,"ssid","signal":0-100,"ip","hostname","user"}
+             ip = IPv4 address on Wi-Fi; user = the account the pedal runs as (for "ssh user@ip")
     saved    ["Home", "Studio", ...]            networks the pedal remembers
     networks [{"ssid","signal","secure","known","active"}, ...]   after a scan
     busy     "Connecting to Studio…" | null
     result   {"ok":bool,"msg":"..."}            after connect / forget
 """
 import queue
+import getpass
 import socket
 import subprocess
 import threading
@@ -100,10 +102,17 @@ def saved_profiles():
     return profiles
 
 
+def _user():
+    try:
+        return getpass.getuser()
+    except Exception:
+        return None
+
+
 def status():
     dev, state = wifi_device()
     st = {"device": dev, "connected": False, "ssid": None, "signal": None, "ip": None,
-          "hostname": socket.gethostname()}
+          "hostname": socket.gethostname(), "user": _user()}
     if dev and state == "connected":
         st["connected"] = True
         active = next((n for n in visible(dev) if n["active"]), None)
