@@ -11,6 +11,8 @@ SupplementaryGroups=audio
 EnvironmentFile=/etc/default/melon-pedal
 Environment=JACK_NO_AUDIO_RESERVATION=1
 ExecStartPre=+/usr/local/lib/melon-pedal/cpu-performance.sh
+# choose the audio interface (as root: udev also writes to /run/melon-pedal); waits up to 30 s for it
+ExecStartPre=+/usr/local/lib/melon-pedal/melon-audio select --wait 30
 ExecStart=/usr/local/lib/melon-pedal/start-jack.sh
 LimitRTPRIO=95
 LimitMEMLOCK=infinity

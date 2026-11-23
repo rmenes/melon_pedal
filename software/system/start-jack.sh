@@ -1,6 +1,5 @@
 #!/bin/sh
-# Chooses the audio interface (melon-audio select: JACK_DEVICE, or any USB interface when JACK_DEVICE=auto),
-# waits for it (USB can appear a few seconds after boot), then starts JACK with its settings.
-/usr/local/lib/melon-pedal/melon-audio select --wait 30 || exit 1
+# Starts JACK on the interface chosen by melon-audio (run as root by melon-jack.service just before this,
+# see ExecStartPre): /run/melon-pedal/audio.env has the card, rate and buffer.
 . /run/melon-pedal/audio.env
 exec jackd -R -P 80 -d alsa -d "$JACK_DEVICE" -r "$JACK_RATE" -p "$JACK_PERIOD" -n "$JACK_NPERIODS" $JACK_EXTRA
