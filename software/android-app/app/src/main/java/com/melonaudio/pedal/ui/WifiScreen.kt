@@ -236,19 +236,19 @@ private fun IpRow(ip: String, user: String?) {
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(top = 10.dp)
+            .padding(top = 8.dp)
             .background(Melon.surfaceHigh, RoundedCornerShape(6.dp))
             .clickable {
                 clipboard.setText(AnnotatedString(ssh))
                 copied = true
             }
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
-        Text("IPv4 ADDRESS", color = Melon.sage, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-        Text(ip, color = Melon.cream, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
+        Text("IPv4 ADDRESS", color = Melon.sage, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+        Text(ip, color = Melon.cream, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
         Text(
             if (copied) "Copied: $ssh" else "$ssh  ·  tap to copy",
-            color = if (copied) Melon.lime else Melon.sage, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+            color = if (copied) Melon.lime else Melon.sage, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
         )
     }
 }
