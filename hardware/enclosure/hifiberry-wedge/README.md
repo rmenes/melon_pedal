@@ -1,4 +1,6 @@
-# Enclosure variant: HiFiBerry wedge (v0.2, fit-check print)
+# Enclosure variant: HiFiBerry wedge (v0.3, fit-check print)
+
+**v0.3 (2026-11-24):** new lid layout: **2.8" ILI9341 screen (320×240)** in the middle, the **four knobs in a 2 × 2 grid at the back** (like the PoC), footswitch and LED further forward, knob numbers beside the knobs. Only the lid changed; the tray is the same as v0.2.
 
 Audio goes through the **HiFiBerry DAC2 ADC Pro** HAT on the Pi (see the [hardware architecture](../../../docs/hardware-architecture.md)). Everything for this variant lives in this folder: STLs, generator, previews and concept renders.
 
@@ -49,16 +51,15 @@ Labels use the brand font **Fredoka** when it is in `tools/fonts/` or `E:\melon_
 
 | Part under the lid | Gap to the part below |
 |---|---|
-| Encoder 1 | ~8 mm above the HiFiBerry |
-| **Encoder 2** | **~0 mm above the HiFiBerry's RCA/3.5 mm jacks** *if* they sit at the board's USB end (to verify) |
-| Encoders 3, 4 | ~20 mm above the 6.35 mm jacks |
-| LCD module | ~8 mm above the HiFiBerry jacks |
-| Footswitch | ~12 mm above the floor |
-| LED | ~10 mm above the HiFiBerry |
+| Encoders 1, 2 | 15 mm above the HiFiBerry |
+| Encoders 3, 4 | 22 mm above the 6.35 mm jacks |
+| **2.8" LCD board** | **2 mm above the HiFiBerry's RCA/3.5 mm jacks** *if* they sit at the board's USB end (to verify) |
+| Footswitch | 11 mm above the floor |
+| LED | 32 mm above the floor |
 
-The only tight spot is encoder 2 over the HiFiBerry's own output jacks. Your audio goes through the header connectors, so those jacks are unused. If the HiFiBerry, once it arrives, really has them there, either:
-- keep the control board flat under knob 2 (nothing taller than the encoder), or
-- remove the RCA/3.5 mm jacks (already in the optimization backlog).
+The only tight spot is the screen board over the HiFiBerry's own output jacks. Your audio goes through the header connectors, so those jacks are unused. If the HiFiBerry, once it arrives, really has them there, either:
+- remove the RCA/3.5 mm jacks (already in the optimization backlog), which gives ~13 mm, or
+- check the real gap with both boards in hand; wire the screen with a right-angle header or wires, never straight pins pointing down.
 
 ## Measure before the final print
 
@@ -70,7 +71,8 @@ The only tight spot is encoder 2 over the HiFiBerry's own output jacks. Your aud
 | EC11 bushing / body | `ENC_HOLE`, `ENC_POCKET` | 7.6 mm / 13.6 mm square. EC11 has a small anti-rotation tab: bend it off or add a hole |
 | Footswitch thread / body depth | `FOOT_HOLE`, `LID_PARTS["footswitch"]` | 12.4 mm / 25 mm |
 | LED bezel | `LED_HOLE` | 6.2 mm |
-| LCD module glass outline / size | `LCD_POCKET`, `LID_PARTS["LCD module"]` | 42 × 32 mm / 52 × 38 × 7 mm |
+| 2.8" LCD glass outline / board size | `LCD_POCKET`, `LID_PARTS["LCD module"]` | 70 × 51 mm / 86 × 50 × 8.7 mm |
+| 2.8" LCD active area position on the glass | `LCD_VIEW`, `LCD_C` | 58 × 44 mm, centred (many boards are off-centre: measure) |
 | Heat-set insert | `INSERT_HOLE` | 4.0 mm |
 | HiFiBerry jack position and height | `FLOOR_PARTS[...]` | at the USB end, 11 mm tall |
 | Pi USB stack height, Pi position | `USB_CUT_Z`, `PI_X0`, `PI_Y0` | ports end 1 mm inside the right wall |

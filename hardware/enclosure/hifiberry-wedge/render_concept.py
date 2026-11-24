@@ -13,6 +13,7 @@ import argparse
 import os
 import time
 
+import math
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
@@ -62,13 +63,13 @@ def to_flat(p):
     return q
 
 
-KNOBS = [flat(k) for k in [(-30.0, -5.0), (30.0, -5.0), (-30.0, 38.0), (30.0, 38.0)]]
-FOOT_XY = flat((0.0, -44.0))
-LED_XY = flat((0.0, -24.0))
-LCD_C = flat((0.0, 16.5))         # LCD window centre (flat frame)
-LCD_HALF = (23.0, 18.0)           # bezel recess half size
-WIN_HALF = (21.0, 16.0)           # window half size
-GLASS_HALF = (20.4, 15.3)         # active screen half size
+KNOBS = [flat(k) for k in [(-24.0, 33.0), (24.0, 33.0), (-24.0, 55.0), (24.0, 55.0)]]
+FOOT_XY = flat((0.0, -50.0))
+LED_XY = flat((0.0, -35.0))
+LCD_C = flat((0.0, -3.0))         # LCD window centre (flat frame)
+LCD_HALF = (31.0, 24.0)           # bezel recess half size
+WIN_HALF = (29.0, 22.0)           # window half size
+GLASS_HALF = (28.8, 21.6)         # active screen half size
 JZ = Z0 + 17.0                    # jack centre height
 JACKS = [  # x, kind
     (-36.0, "big"), (-16.0, "dc"), (1.0, "mini"), (16.0, "mini"), (36.0, "big")]
@@ -225,10 +226,11 @@ def make_top_texture():
     # brand at the front strip
     f_big = font("Bold", int(7.0 * TEX_PX))
     f_small = font("Medium", int(2.6 * TEX_PX))
-    cx, cy = xy(0, -58.0 / CA)
+    # v0.3 layout: the footswitch sits at the front, so the lettering goes on either side of it
+    cx, cy = xy(-30.0, -50.0 / CA)
     dr.text((cx, cy), "MELON", font=f_big, fill=cream, anchor="mm")
-    cx, cy = xy(0, -63.4 / CA)
-    dr.text((cx, cy), "S T E R E O   ·   L V 2   ·   M I D I", font=f_small, fill=CREAM + (200,), anchor="mm")
+    cx, cy = xy(30.0, -50.0 / CA)
+    dr.text((cx, cy), "STEREO · LV2 · MIDI", font=f_small, fill=CREAM + (200,), anchor="mm")
     # knob numbers + tick arcs
     f_num = font("SemiBold", int(3.2 * TEX_PX))
     for i, (kx, ky) in enumerate(KNOBS):
@@ -238,7 +240,7 @@ def make_top_texture():
             x0, y0 = cx + r * np.cos(a), cy + r * np.sin(a)
             x1, y1 = cx + (r + 1.6 * TEX_PX) * np.cos(a), cy + (r + 1.6 * TEX_PX) * np.sin(a)
             dr.line((x0, y0, x1, y1), fill=CREAM + (170,), width=int(0.45 * TEX_PX))
-        tx, ty = xy(kx, ky - 14.5 / CA)
+        tx, ty = xy(kx + math.copysign(11.5, kx), ky)
         dr.text((tx, ty), str(i + 1), font=f_num, fill=cream, anchor="mm")
     # footswitch ring
     cx, cy = xy(*FOOT_XY)

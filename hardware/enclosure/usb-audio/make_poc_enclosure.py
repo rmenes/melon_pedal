@@ -8,16 +8,19 @@ the box and plugs into the Pi's USB ports through the open back wall.
 
 Needs numpy, scipy and matplotlib (no CAD program).
 
-Outside size: 65 W x 120 D x 40 H mm (bottom plate included). Two parts:
+Outside size: 72 W x 120 D x 40 H mm (bottom plate included). Two parts:
   * melon-poc-shell.stl  top panel + four walls. Footswitch, LED, 2.0" LCD and 4 encoders
                          mount in the top. Print UPSIDE DOWN (top on the bed): the wall
                          cut-outs are open at the bottom, so nothing needs supports.
   * melon-poc-plate.stl  bottom plate with the Pi 4 standoffs and vents. Print flat.
-The plate sits inside the walls, flush with their bottom edge. Fixing (all from below):
-  * 2 x M3 x 8 into heat-set inserts in the two front corner columns
-  * 2 x M2.5 x 16 through the plate, the rear standoffs and the Pi's rear holes into
-    pillars that hang from the top panel
-  * the Pi's front holes: 2 x M2.5 x 6 from above into the plate standoffs
+The plate sits inside the walls, flush with their bottom edge. Fixing:
+  * plate -> shell, from below: 2 x M3 x 8 into heat-set inserts in the two front corner
+    columns, and 2 x M2.5 x 12 (pan head) self-tapping into two bosses fused to the side
+    walls at the rear, beside the Pi. No free-standing pillars.
+  * Pi -> plate (independent of the shell): 4 x M2.5 x 6 from above through the Pi's holes,
+    self-tapping into the plate standoffs. So the Pi + plate come out as one unit.
+  * LCD module -> top panel: 4 x M2 x 4 from below through the module's corner holes,
+    self-tapping into short bosses under the top panel
 
 Pi 4 placement: 85 mm side along the depth, USB/Ethernet at the back wall (open cut-out),
 USB-C/micro-HDMI at the right wall (open cut-out), GPIO header along the left wall.
@@ -40,7 +43,7 @@ from scipy.spatial import Delaunay
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # =========================================================== PARAMETERS
-W, L, H = 65.0, 120.0, 40.0      # outside width, depth, height
+W, L, H = 72.0, 120.0, 40.0      # outside width, depth, height (65 -> 68 for the LCD board, -> 72 for the rear wall bosses, 2026-11-24)
 HW, HL = W / 2, L / 2
 R_CORNER = 4.0                   # vertical corner radius
 WALL = 2.4                       # wall thickness (6 perimeters of 0.4)
@@ -55,33 +58,42 @@ FOOT_RING = (20.0, 3.0)                      # reinforcing ring under the top: o
 LED_XY, LED_HOLE = (0.0, -31.0), 6.0         # 3 mm LED chrome bezel (check yours)
 LCD_C = (0.0, -5.0)                          # LCD window centre
 LCD_WINDOW = (42.0, 32.0)                    # visible area (2.0" ST7789, landscape)
-LCD_POCKET = (58.5, 35.5, 1.0)               # locating pocket under the top: module board w, h, depth
+LCD_POCKET = (61.5, 35.5, 1.0)               # locating pocket under the top: module board w, h, depth (+3 mm, measured fit)
+LCD_STACK = 2.7                              # glass + backlight + tape above the module PCB (measure: PCB front face to glass top)
+LCD_HOLES = [(sx * 28.25, sy * 15.25) for sx in (-1, 1) for sy in (-1, 1)]   # module holes from LCD_C (GUESS: 2.5 mm in from the board corners - measure)
+LCD_BOSS_D, LCD_PILOT = 4.0, 1.6                # M2 self-tapping
+LCD_SKIN = 0.6                                  # plastic left above the pilot hole (top surface stays closed)
 ENC_HOLE = 7.2                               # EC11 M7 bushing
 ENCODERS = [(-14.0, 22.0), (14.0, 22.0), (-14.0, 42.0), (14.0, 42.0)]   # 1, 2 front row; 3, 4 back row
 
 # --- Pi 4 ----------------------------------------------------------------
 PI_W, PI_L = 56.0, 85.0
-PI_X0 = -PI_W / 2                            # GPIO edge (left)
+PI_X0 = -PI_W / 2                            # GPIO edge (left); centred so both sides leave room for the rear bosses
 PI_Y0 = HL - WALL - 2.6 - PI_L               # SD-card end (front); USB/Ethernet end 2.6 mm from the back wall
 STANDOFF_H, STANDOFF_D = 3.0, 6.0            # printed standoffs on the plate
 PI_T = 1.4
 Z_PI_TOP = PLATE + STANDOFF_H + PI_T
-PI_FRONT_HOLES = [(PI_X0 + 3.5, PI_Y0 + 3.5), (PI_X0 + 52.5, PI_Y0 + 3.5)]
-PI_REAR_HOLES = [(PI_X0 + 3.5, PI_Y0 + 61.5), (PI_X0 + 52.5, PI_Y0 + 61.5)]
+PI_HOLES = [(PI_X0 + 3.5, PI_Y0 + 3.5), (PI_X0 + 52.5, PI_Y0 + 3.5),
+            (PI_X0 + 3.5, PI_Y0 + 61.5), (PI_X0 + 52.5, PI_Y0 + 61.5)]
 M25_PILOT = 2.2                              # M2.5 self-tapping into PETG/ASA
-M25_CLEAR = 2.8
-M25_HEAD = (5.2, 1.6)                        # counterbore in the plate: diameter, depth
-PILLAR_D = 5.5                               # pillars from the top down onto the Pi's rear holes
 
 # --- front corner columns with M3 heat-set inserts -------------------------
 COLUMN_D = 10.0
-COLUMNS = [(-25.5, -(HL - WALL) + 4.8), (25.5, -(HL - WALL) + 4.8)]
+COLUMNS = [(-(HW - 7.0), -(HL - WALL) + 4.8), (HW - 7.0, -(HL - WALL) + 4.8)]
+# rear bosses fused to the side walls, beside the Pi's USB end (nothing on the board edges there)
+REAR_BOSS = (5.0, 10.0)                      # depth from the wall, length along y
+REAR_BOSS_Y = PI_Y0 + 75.0
+REAR_SCREW_FROM_WALL = 2.6                   # M2.5 self-tapping screw centre from the inner wall face
+REAR_BOSSES = [(sx * (HW - WALL - REAR_SCREW_FROM_WALL), REAR_BOSS_Y) for sx in (-1, 1)]
+REAR_PILOT_DEPTH = 12.0
+M25_CLEAR = 2.8                              # rear screws: no counterbore (too close to the plate edge); the pan head
+                                             # sits on the plate and the bottom edge of the wall
 INSERT_HOLE, INSERT_DEPTH = 4.0, 6.0         # M3 x 5.7 brass inserts (check your kit: 4.0-4.2)
 M3_CLEAR, M3_HEAD = 3.4, (6.6, 1.8)
 
 # --- wall cut-outs (open at the bottom) -------------------------------------
-BACK_CUT = (-27.5, 27.5, Z_PI_TOP + 16.0 + 1.6)          # x0, x1, top z: 4 x USB + Ethernet
-RIGHT_CUT = (PI_Y0 + 3.0, PI_Y0 + 48.0, Z_PI_TOP + 6.0)  # y0, y1, top z: USB-C + 2 x micro-HDMI
+BACK_CUT = (PI_X0 + 0.5, PI_X0 + PI_W - 0.5, Z_PI_TOP + 16.0 + 1.6)   # x0, x1, top z: 4 x USB + Ethernet (follows the Pi)
+RIGHT_CUT = (PI_Y0 + 3.0, PI_Y0 + 48.0, Z_PI_TOP + 7.5)  # y0, y1, top z: USB-C + 2 x micro-HDMI (ports 5.6 mm in from the wall)
 
 # --- vents (vertical slots / plate slots) -----------------------------------
 # Wall slots have 45-degree pointed ends (user's v2, 2026-11-22): with the shell upside down
@@ -89,7 +101,7 @@ RIGHT_CUT = (PI_Y0 + 3.0, PI_Y0 + 48.0, Z_PI_TOP + 6.0)  # y0, y1, top z: USB-C 
 VENT_W = 2.6
 LEFT_VENTS_Y = [-45.0 + 5.0 * i for i in range(13)]       # y = -45 .. 15
 LEFT_VENT_Z = (12.0, 31.0)
-RIGHT_VENTS_Y = [22.0 + 5.0 * i for i in range(6)]        # rear half, behind the port cut-out
+RIGHT_VENTS_Y = [y for y in (22.0, 27.0, 32.0, 37.0, 52.0) if abs(y - REAR_BOSS_Y) > REAR_BOSS[1] / 2 + 1.5]   # rear half, clear of the boss
 RIGHT_VENT_Z = (16.0, 31.0)
 PLATE_VENTS_X = [-15.0 + 5.0 * i for i in range(7)]
 PLATE_VENT_Y = (PI_Y0 + 12.0, PI_Y0 + 45.0)               # under the SoC
@@ -292,8 +304,15 @@ def shell():
     window = rrect(*LCD_C, *LCD_WINDOW, 1.0)
     pw, ph, pd = LCD_POCKET
     pocket = rrect(*LCD_C, pw, ph, 0.8)
+    lcd_xy = [(LCD_C[0] + dx, LCD_C[1] + dy) for dx, dy in LCD_HOLES]
+    pilots = [circle(x, y, LCD_PILOT) for x, y in lcd_xy]
+    z_pilot_top = H - LCD_SKIN
     part.add(extrude([outline, pocket] + through, Z_TOP_UNDER, Z_TOP_UNDER + pd))
-    part.add(extrude([outline, window] + through, Z_TOP_UNDER + pd - EPS / 2, H))
+    part.add(extrude([outline, window] + through + pilots, Z_TOP_UNDER + pd - EPS / 2, z_pilot_top))
+    part.add(extrude([outline, window] + through, z_pilot_top - EPS / 2, H))
+    # LCD screw bosses: from the pocket roof down to the module PCB
+    for x, y in lcd_xy:
+        part.add(tube(x, y, LCD_BOSS_D, LCD_PILOT, Z_TOP_UNDER + pd - LCD_STACK, Z_TOP_UNDER + pd + EPS))
 
     zt = Z_TOP_UNDER + EPS                       # walls reach into the top panel
     # back wall (normal +y, a = -x): USB + Ethernet cut-out open at the bottom
@@ -319,10 +338,15 @@ def shell():
     for x, y in COLUMNS:
         part.add(tube(x, y, COLUMN_D, INSERT_HOLE, PLATE, PLATE + INSERT_DEPTH))
         part.add(tube(x, y, COLUMN_D, None, PLATE + INSERT_DEPTH - EPS, zt))
-    # pillars onto the Pi's rear holes (M2.5 screws from below self-tap into them)
-    for x, y in PI_REAR_HOLES:
-        part.add(tube(x, y, PILLAR_D, M25_PILOT, Z_PI_TOP, Z_TOP_UNDER - 3.0))
-        part.add(tube(x, y, PILLAR_D, None, Z_TOP_UNDER - 3.0 - EPS, zt))
+    # rear bosses fused to the side walls (they reach 0.6 mm into the wall so they print as one)
+    bd, bl = REAR_BOSS
+    for sx in (-1, 1):
+        xin = sx * (HW - WALL)
+        cx = xin - sx * (bd - 0.6) / 2
+        body = rrect(cx, REAR_BOSS_Y, bd + 0.6, bl, 1.0)
+        hole = circle(sx * (HW - WALL - REAR_SCREW_FROM_WALL), REAR_BOSS_Y, M25_PILOT)
+        part.add(extrude([body, hole], PLATE, PLATE + REAR_PILOT_DEPTH))
+        part.add(extrude([body], PLATE + REAR_PILOT_DEPTH - EPS, zt))
     # reinforcing ring around the footswitch
     part.add(tube(*FOOT_XY, FOOT_RING[0], FOOT_HOLE, Z_TOP_UNDER - FOOT_RING[1], zt))
     return part
@@ -333,16 +357,16 @@ def plate():
     w, l = W - 2 * (WALL + PLATE_GAP), L - 2 * (WALL + PLATE_GAP)
     outline = rrect(0, 0, w, l, max(0.5, R_CORNER - WALL))
     vents = [rrect(x, sum(PLATE_VENT_Y) / 2, VENT_W, PLATE_VENT_Y[1] - PLATE_VENT_Y[0], VENT_W / 2) for x in PLATE_VENTS_X]
-    heads = [circle(x, y, M3_HEAD[0]) for x, y in COLUMNS] + [circle(x, y, M25_HEAD[0]) for x, y in PI_REAR_HOLES]
-    shanks = [circle(x, y, M3_CLEAR) for x, y in COLUMNS] + [circle(x, y, M25_CLEAR) for x, y in PI_REAR_HOLES]
-    pilots = [circle(x, y, M25_PILOT) for x, y in PI_FRONT_HOLES]
-    hd = max(M3_HEAD[1], M25_HEAD[1])
-    part.add(extrude([outline] + vents + heads + pilots, 0, hd))
-    part.add(extrude([outline] + vents + shanks + pilots, hd - EPS / 2, PLATE))
-    for x, y in PI_FRONT_HOLES:
-        part.add(tube(x, y, STANDOFF_D, M25_PILOT, PLATE - EPS, PLATE + STANDOFF_H))
-    for x, y in PI_REAR_HOLES:
-        part.add(tube(x, y, STANDOFF_D, M25_CLEAR, PLATE - EPS, PLATE + STANDOFF_H))
+    heads = [circle(x, y, M3_HEAD[0]) for x, y in COLUMNS]
+    shanks = [circle(x, y, M3_CLEAR) for x, y in COLUMNS]
+    rear = [circle(x, y, M25_CLEAR) for x, y in REAR_BOSSES]
+    hd = M3_HEAD[1]
+    part.add(extrude([outline] + vents + heads + rear, 0, hd))
+    part.add(extrude([outline] + vents + shanks + rear, hd - EPS / 2, PLATE))
+    # Pi standoffs: blind pilot holes, the M2.5 screws come from above (plate bottom stays closed)
+    for x, y in PI_HOLES:
+        part.add(tube(x, y, STANDOFF_D, M25_PILOT, PLATE, PLATE + STANDOFF_H))
+        part.add(tube(x, y, STANDOFF_D, None, PLATE - 1.5, PLATE + EPS))
     return part
 
 
@@ -356,6 +380,11 @@ def report():
         f"rear encoders over the USB ports: about {enc_bottom - usb_top:.1f} mm (trim/bend the pins, Kapton tape)",
         f"LCD pocket {LCD_POCKET[0]} mm in {W - 2 * WALL:.1f} mm inside width",
         f"gap LCD pocket -> front encoder row: {ENCODERS[0][1] - 6.5 - (LCD_C[1] + LCD_POCKET[1] / 2):.1f} mm",
+        f"Pi side gaps: {PI_X0 - (-HW + WALL):.1f} / {(HW - WALL) - (PI_X0 + PI_W):.1f} mm; rear boss face -> Pi edge: "
+        f"{(HW - WALL - REAR_BOSS[0]) - (PI_X0 + PI_W):.1f} mm",
+        f"plastic between rear pilot and boss face: {REAR_BOSS[0] - REAR_SCREW_FROM_WALL - M25_PILOT / 2:.1f} mm; "
+        f"rear shank hole -> plate edge: {REAR_SCREW_FROM_WALL - PLATE_GAP - M25_CLEAR / 2:.1f} mm",
+        f"LCD bosses: {LCD_STACK} mm long, pilot {LCD_STACK + TOP - LCD_POCKET[2] - LCD_SKIN:.1f} mm deep (M2 x 4)",
     ]
     return lines
 

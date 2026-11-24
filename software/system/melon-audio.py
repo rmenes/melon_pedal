@@ -12,6 +12,10 @@ Choice, in this order:
   4. any other USB interface, then any other card with input and output (HiFiBerry)
 Cards without an input (HDMI, the Pi's headphone jack) are ignored.
 
+No interface at all after the wait: JACK runs on its "dummy" driver (MELON_CARD=none, silent), so mod-host,
+the controller, the LCD and the Bluetooth app still work (e.g. to set up Wi-Fi). Plugging an interface in
+later restarts the pedal on it (hotplug).
+
 Per-interface settings: /etc/melon-pedal/audio.d/<card id>.conf, for example Sono.conf:
     PERIOD=128
     NPERIODS=2
@@ -139,6 +143,20 @@ def settings(card, cfg):
     }
 
 
+def dummy_settings(cfg):
+    """No interface: JACK's dummy driver (2 in / 2 out, no sound) keeps the rest of the pedal running."""
+    return {
+        "JACK_DEVICE": "dummy",
+        "JACK_RATE": cfg.get("JACK_RATE", "48000"),
+        "JACK_PERIOD": cfg.get("JACK_PERIOD", "256"),
+        "JACK_NPERIODS": cfg.get("JACK_NPERIODS", "3"),
+        "MELON_CAPTURE": "system:capture_1",
+        "MELON_PLAYBACK": "system:playback_1,system:playback_2",
+        "MELON_CARD": "none",
+        "MELON_CARD_INFO": "No audio interface - plug one in",
+    }
+
+
 def write_env(values):
     os.makedirs(RUN_DIR, exist_ok=True)
     tmp = ENV_OUT + ".tmp"
@@ -178,8 +196,10 @@ def cmd_select(wait):
         if chosen and (dev == "auto" or why == "set in JACK_DEVICE" or time.time() - t0 >= wait):
             break
         if time.time() - t0 >= wait:
-            print(f"No usable audio interface after {wait} s (check 'aplay -l' and 'arecord -l').")
-            return 1
+            write_env(dummy_settings(cfg))
+            print(f"No usable audio interface after {wait} s (check 'aplay -l' and 'arecord -l'): "
+                  "starting JACK without audio (dummy driver) so Bluetooth and Wi-Fi setup still work.")
+            return 0
         time.sleep(1)
     s = settings(chosen, cfg)
     write_env(s)
@@ -208,6 +228,8 @@ def cmd_hotplug():
     chosen, _ = choose(cards(), read_kv(DEFAULTS))
     if chosen and chosen["id"] == current:
         return 0
+    if not chosen and current == "none":
+        return 0  # already running without an interface (e.g. an HDMI card changed)
     subprocess.run(["logger", "-t", "melon-audio",
                     f"audio interface changed ({current or 'none'} -> {chosen['id'] if chosen else 'none'}), "
                     "restarting the pedal"])
