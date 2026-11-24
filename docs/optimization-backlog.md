@@ -53,3 +53,16 @@ Goal: the pedal recognizes and uses any **class-compliant** USB audio interface 
 5. **Buildroot / read-only root.** A reproducible firmware image with a read-only root and a writable data partition, so pulling the plug can't corrupt the system (our software architecture already plans a read-only root + `/data`).
 
 Not planned: Ardor's compiled-in effects and cloud service (we keep LV2 plugins and the Bluetooth app).
+
+### Ideas from the TONE3000 DIY pedal (added 2026-11-24, decided to do later)
+[t3k-diy-pedal](https://github.com/tone-3000/t3k-diy-pedal) (MIT) runs NAM A2-Lite captures on an Electrosmith Daisy Seed (no Linux, four presets of one or two blocks, web app over USB). Its firmware doesn't apply to the Pi, but its gain staging and TONE3000 integration do. Decision: **adopt these seven later**, and **keep both NAM sizes (Full and Light)**: they ship A2-Lite only; we keep Melon NAM's Model Size choice.
+
+1. **NAM input calibration.** Captures with calibration data store `input_level_dbu` (dBu at the gear for 0 dBFS). Feed each capture `pedal_input_dbu − input_level_dbu` dB, so it reacts like the real gear. Melon NAM gets an input-calibration parameter; the pedal sets it from a per-interface figure (`INPUT_DBU` in `audio.d/<card>.conf`; their pedal is +2.2 dBu). Captures without the data stay at unity; the input knob still trims on top.
+2. **Calibrated hand-off between two captures.** When a capture feeds another one (drive capture into amp capture) and carries `output_level_dbu`, scale its output by `output_level_dbu − pedal_input_dbu` dB instead of normalizing, so the second capture is pushed as hard as the real pedal pushed the real amp. Needs the controller to know which NAM block feeds which.
+3. **Loudness normalization with a ±12 dB clamp.** The last capture is brought to −18 dB loudness, never adjusted by more than ±12 dB (unity without data). Melon NAM already normalizes (NeuralAudio's recommended level); add the clamp.
+4. **Cab IR at unity in-band gain.** Scale the IR so its mean power response over 100 Hz–5 kHz (log-spaced) is 0 dB, so amp-only and amp + cab presets sit at the same level. Melon Cab uses JUCE's energy normalization today. Folded into the IR at load.
+5. **Clip indicator.** Flag input or output peaks ≥ 0.98 of full scale: LED flash, LCD header and app.
+6. **TONE3000 in the app.** TONE3000 sign-in (OAuth PKCE), browse tones, download `.nam` / IR files straight into the pedal's library (`/data/media/NAM`, `/data/media/IR`). Store each file's TONE3000 model id in the preset so a missing file can be fetched again. Needs a TONE3000 API key.
+7. **Release builds on GitHub Actions.** Build the arm64 Melon Plugins release zip on every tag (the Pi installs it with `install-melon-plugins.sh --zip`, no compiling on the Pi) and an APK for the Android app.
+
+Confirmed by their design: NAM Light (A2-Lite, ≈ 9 % CPU on our Pi 4) is good enough to ship as a product; our 9 V op-amp rail avoids the input clipping their single 5 V TL072 buffer has (≈ −1 dBu).
