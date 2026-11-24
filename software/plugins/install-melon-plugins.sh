@@ -105,4 +105,4 @@ done
 
 echo
 [ -z "$FAILED" ] || echo "FAILED:$FAILED  (re-run with only those targets after fixing; JOBS=1 if the Pi ran out of memory)"
-echo "Restart the controller to see the new plugins:  sudo systemctl restart melon-pedald"
+echo "Restart mod-host so it loads the new plugins (the controller restarts with it):  sudo systemctl restart melon-modhost"
