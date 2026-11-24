@@ -1,0 +1,5 @@
+[
+  { "uri": "melon-trem", "label": "Default (smooth, mono)", "params": { "rate": 4, "wave": 50, "depth": 50, "sync": 0, "stereo": 0 } },
+  { "uri": "melon-trem", "label": "Triangle, Pan", "params": { "rate": 3, "wave": 0, "depth": 70, "sync": 0, "stereo": 1 } },
+  { "uri": "melon-trem", "label": "Square 12 Hz", "params": { "rate": 12, "wave": 100, "depth": 100, "sync": 0, "stereo": 0 } }
+]

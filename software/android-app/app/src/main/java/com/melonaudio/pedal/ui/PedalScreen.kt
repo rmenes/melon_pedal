@@ -63,6 +63,7 @@ fun PedalScreen(vm: PedalViewModel) {
     var saving by remember { mutableStateOf(false) }
     var browsing by remember { mutableStateOf<Int?>(null) }   // library control whose files are shown
     var wifiOpen by rememberSaveable { mutableStateOf(false) }
+    var audioOpen by rememberSaveable { mutableStateOf(false) }
 
     if (!s.synced || s.plugin == null) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -77,9 +78,14 @@ fun PedalScreen(vm: PedalViewModel) {
         WifiScreen(s.wifi, vm) { wifiOpen = false }
         return
     }
+    if (audioOpen) {
+        AudioScreen(s.audio, vm) { audioOpen = false }
+        return
+    }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        TopBar(s.pedalName, onWifi = { wifiOpen = true }) { vm.disconnect() }
+        TopBar(s.pedalName, onWifi = { wifiOpen = true },
+               onAudio = if (s.audioSupported) ({ audioOpen = true }) else null) { vm.disconnect() }
         PresetBand(s)
         if (s.chainSupported) ChainStrip(s) { b -> vm.selectBlock(b) }
         Spacer(Modifier.height(10.dp))
@@ -165,11 +171,12 @@ fun PedalScreen(vm: PedalViewModel) {
 }
 
 @Composable
-private fun TopBar(name: String, onWifi: () -> Unit, onDisconnect: () -> Unit) {
+private fun TopBar(name: String, onWifi: () -> Unit, onAudio: (() -> Unit)?, onDisconnect: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(8.dp).background(Melon.lime, CircleShape))
         Spacer(Modifier.width(8.dp))
         Text(name, color = Melon.sage, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        onAudio?.let { TextButton(onClick = it) { Text("Audio", color = Melon.lime, fontSize = 13.sp) } }
         TextButton(onClick = onWifi) { Text("Wi-Fi", color = Melon.lime, fontSize = 13.sp) }
         TextButton(onClick = onDisconnect) { Text("Disconnect", color = Melon.sage, fontSize = 13.sp) }
     }

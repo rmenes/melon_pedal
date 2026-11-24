@@ -13,7 +13,7 @@ The knobs, the LCD and the app's Sound screen always work on the **selected bloc
 | C | parameter 3 | **selected block on/off** | **save preset** |
 | D | parameter 4 | next plugin in the selected block | **preset / plugin browser** |
 
-**Browser:** turn A = move · press A = back · press B = presets / plugins · press D = load.
+**Browser:** turn A = move · press A = back · press B = presets → plugins → audio I/O · press D = load.
 In the **plugins** tab: press D = replace the selected block · press **C = add as a new block**
 (it goes to its category's place: Gate → Pitch/Synth → Comp → Drive → Amp → Cab → Mod → Delay → Reverb → EQ).
 **Save:** turn A = cursor · turn B = letter · turn C = slot (24 slots, 4 banks of 6) · press D = save · press A = cancel.
@@ -23,6 +23,17 @@ If a knob does the wrong thing, check which CC it really sends with
 The NexFoot sends value 0 when a knob is pressed and 127 when it is released; for a controller that does the opposite, add `--press-high`.
 
 Presets are kept in `~/.config/melon-pedald/presets.json` (change with `--presets`).
+
+**Audio I/O** (third browser tab, also in the app under **Audio**): which inputs and outputs of the interface
+the pedal uses. Inputs: mono `In k` (feeds both sides of the chain) or stereo pairs `In 1+2`, `In 3+4`…;
+outputs: stereo pairs `Out 1+2`… or mono `Out k`. Press D on a row to use it: instant (only the JACK links
+change), and remembered per interface in `~/.config/melon-pedald/audio-ports.json`, so each interface keeps its
+own choice. `--capture` / `--playback` on the command line still win.
+
+**Last sound:** the live sound (chain, values, selected block, bypass, and the preset it came from, unsaved edits included)
+is saved to `~/.config/melon-pedald/state.json` a couple of seconds after it changes. When the controller restarts
+(audio interface plugged in or removed, crash, reboot) it comes back exactly as it was. `--preset N` or `--plugin X`
+start with that instead; `--state ''` turns this off.
 `--preset 3` starts with preset 3. The screen shows **EDITED** when you change a loaded preset.
 
 Knobs "pick up" a parameter once they pass its current value (no jumps);

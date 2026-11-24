@@ -30,7 +30,7 @@ From one LV2 plugin at a time (v1) to a **chain of blocks** per preset. Builds o
 | 4 | Drive | Dirt, Muffs |
 | 5 | Amp | NAM |
 | 6 | Cab | Cab |
-| 7 | Modulation | Chorus, Flanger (later: a Melon Multimod) |
+| 7 | Modulation | Chorus, Flanger, MultiMod, Trem |
 | 8 | Delay | Delay 2290, Multi Delay |
 | 9 | Reverb | Reverberare |
 | 10 | EQ (post) | GraphicEQ, Pro EQ (EQ can go anywhere; default is a post-EQ at the end) |

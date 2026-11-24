@@ -30,6 +30,7 @@ Run (with jackd and `mod-host -n -p 5555` already running):
   python3 -m melon_pedald --list
 """
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -37,12 +38,13 @@ import sys
 import threading
 import time
 
-from . import catalog, library, tuner
+from . import audio_io, catalog, library, tuner
 from .chain import (CHAIN_FACTOR, LIMIT, MAX_BLOCKS, NAM_COST, Block, CostTable, insert_position,
                     open_meter)
 from .display import Display
 from .engine import FakeEngine, Feedback, ModHost, ModHostError
-from .presets import CHARSET, DEFAULT_PATH, NAME_LEN, SLOTS, PresetStore, chain_of, label
+from .presets import CHARSET, DEFAULT_PATH, NAME_LEN, SLOTS, PresetStore, chain_entries, chain_of, label
+from .state import STATE_PATH, StateKeeper
 from .remote import RemoteHub
 
 TURN_CC = [57, 68, 74, 89]     # NexFoot A, B, C, D (turn)
@@ -79,7 +81,9 @@ class Pedal:
         self.last_hint = [0.0] * 4
         self.slot = None                 # preset slot the current sound came from
         self.mode = "play"               # play | browse | save
-        self.tab = "presets"             # browser tab: presets | plugins
+        self.tab = "presets"             # browser tab: presets | plugins | audio
+        self.ports = None                # audio_io.PortStore: remembered inputs/outputs per interface
+        self.io_rows = []                # audio tab rows: ("in" | "out", option)
         self.sel = 0                     # browser selection
         self.save_name = []
         self.save_cursor = 0
@@ -333,14 +337,35 @@ class Pedal:
         p = self.presets.get(slot)
         if not p:
             return False
+        return self._apply_sound(p, slot, f"preset {label(slot)} {p['name']}")
+
+    def snapshot(self):
+        """The live sound (chain, values, selected block, bypass, preset it came from): see state.py."""
+        return {"slot": self.slot, "cur": self.cur, "bypassed": self.bypassed,
+                "chain": chain_entries(self.chain)}
+
+    def restore(self, state):
+        """Bring back a snapshot() (after a restart: new audio interface, crash, reboot)."""
+        if not state or not state.get("chain"):
+            return False
+        slot = state.get("slot")
+        if not (isinstance(slot, int) and self.presets.get(slot)):
+            slot = None
+        if not self._apply_sound(state, slot, "last sound (restored)"):
+            return False
+        if state.get("bypassed"):
+            self.set_bypass(True)
+        return True
+
+    def _apply_sound(self, p, slot, title):
         entries = chain_of(p)
         by_uri = {pl.uri: pl for pl in self.plugins}
         missing = [e.get("plugin_name") or e["plugin"] for e in entries if e["plugin"] not in by_uri]
         if missing or not entries:
-            print(f"! preset {label(slot)} needs {', '.join(missing) or 'a plugin'}, which is not installed")
+            print(f"! {title} needs {', '.join(missing) or 'a plugin'}, which is not installed")
             return False
         self.slot = slot
-        print(f"\n>>> preset {label(slot)} {p['name']}  ({len(entries)} block{'s' if len(entries) > 1 else ''})")
+        print(f"\n>>> {title}  ({len(entries)} block{'s' if len(entries) > 1 else ''})")
         if [b.plugin.uri for b in self.chain] == [e["plugin"] for e in entries]:
             for b, e in zip(self.chain, entries):     # same chain: just set the values (no gap)
                 saved = e.get("values", {})
@@ -584,13 +609,51 @@ class Pedal:
     def browser_rows(self):
         if self.tab == "presets":
             return [self.presets.get(i) for i in range(SLOTS)]
+        if self.tab == "audio":
+            return self.io_rows
         return self.plugins
+
+    # --- audio inputs / outputs (any multi-channel interface) ---
+    def io_options(self):
+        """(input options, output options) for the interface JACK runs on (see audio_io.py)."""
+        nums = [audio_io._num(x) for x in self.capture], [audio_io._num(x) for x in self.playback]
+        n_in, n_out = audio_io.jack_counts(max(2, *nums[0]), max(2, *nums[1]))
+        return audio_io.input_options(n_in), audio_io.output_options(n_out)
+
+    def io_current(self):
+        return audio_io.option_id(self.capture), audio_io.option_id(self.playback)
+
+    def set_io(self, inp=None, out=None):
+        """Use input option `inp` and/or output option `out` (ids like "1", "1+2"). Instant: JACK links only."""
+        ins, outs = self.io_options()
+        if inp is not None:
+            o = audio_io.find(ins, str(inp))
+            if not o:
+                raise ChainError(f"no input {inp} on this interface")
+            self.capture = list(o["ports"])
+        if out is not None:
+            o = audio_io.find(outs, str(out))
+            if not o:
+                raise ChainError(f"no output {out} on this interface")
+            self.playback = list(o["ports"])
+        self.route()
+        if self.ports:
+            try:
+                self.ports.put(audio_io.card(), self.capture, self.playback)
+            except OSError as e:
+                print(f"! could not save the audio ports ({e})")
+        i, o = self.io_current()
+        print(f"  audio: input {i} · output {o}  ({audio_io.card()})")
+        self.display.audio(self)
 
     def show_menu(self):
         if self.mode == "browse":
             if self.tab == "presets":
                 p = self.presets.get(self.sel)
                 print(f"  > {label(self.sel)}  {p['name'] + '  (' + p.get('plugin_name', '') + ')' if p else '- empty -'}")
+            elif self.tab == "audio":
+                kind, o = self.io_rows[self.sel]
+                print(f"  > {o['label']}")
             else:
                 print(f"  > {self.plugins[self.sel].name}")
             self.display.browser(self)
@@ -647,14 +710,32 @@ class Pedal:
             if k == 0:
                 self.back()
             elif k == 1 or (k == 2 and self.tab == "presets"):
-                self.tab = "plugins" if self.tab == "presets" else "presets"
-                self.sel = self.idx if self.tab == "plugins" else (self.slot or 0)
-                print(f"\n[ {self.tab} ]" + ("  press D = replace the selected block · press C = add as a new block"
-                                             if self.tab == "plugins" else ""))
+                self.tab = {"presets": "plugins", "plugins": "audio", "audio": "presets"}[self.tab]
+                if k == 2:
+                    self.tab = "plugins"
+                if self.tab == "plugins":
+                    self.sel = self.idx
+                elif self.tab == "audio":
+                    ins, outs = self.io_options()
+                    self.io_rows = [("in", o) for o in ins] + [("out", o) for o in outs]
+                    cur_in, _ = self.io_current()
+                    self.sel = next((n for n, (_, o) in enumerate(self.io_rows) if o["id"] == cur_in), 0)
+                else:
+                    self.sel = self.slot or 0
+                print(f"\n[ {self.tab} ]" + {"plugins": "  press D = replace the selected block · "
+                                                        "press C = add as a new block",
+                                             "audio": "  turn A = move · press D = use this input / output"
+                                             }.get(self.tab, ""))
                 self.show_menu()
+            elif k == 2 and self.tab == "audio":
+                return
             elif k == 2:                                   # plugins tab: add as a new block
                 self.mode = "play"
                 self.add_block(self.sel)
+            elif k == 3 and self.tab == "audio":
+                kind, o = self.io_rows[self.sel]
+                self.set_io(**{"inp" if kind == "in" else "out": o["id"]})
+                self.show_menu()
             elif k == 3:
                 if self.tab == "presets":
                     if not self.presets.get(self.sel):
@@ -775,8 +856,11 @@ def main():
     ap.add_argument("--match", default="melon", help="only cycle through plugins containing this text ('' = all)")
     ap.add_argument("--lv2-dir", action="append", help="LV2 folder to scan (default: ~/.lv2 and system folders)")
     ap.add_argument("--midi-port", default="Nexfoot MIDI:1", help="ALSA MIDI port of the controller")
-    ap.add_argument("--capture", default="system:capture_1", help="JACK input(s), comma separated")
-    ap.add_argument("--playback", default="system:playback_1,system:playback_2", help="JACK outputs")
+    ap.add_argument("--capture", default=None,
+                    help="JACK input(s), comma separated (default: the last choice for this interface, "
+                         "else melon-audio's)")
+    ap.add_argument("--playback", default=None,
+                    help="JACK outputs (default: the last choice for this interface, else melon-audio's)")
     ap.add_argument("--turn-cc", default=",".join(map(str, TURN_CC)),
                     help="CC numbers of knobs A,B,C,D when turned (check with aseqdump)")
     ap.add_argument("--press-cc", default=",".join(map(str, PRESS_CC)),
@@ -787,6 +871,8 @@ def main():
     ap.add_argument("--feedback-port", type=int, default=0,
                     help="mod-host feedback port (default: --port + 1, i.e. mod-host -f 5556)")
     ap.add_argument("--presets", default=DEFAULT_PATH, help="preset file")
+    ap.add_argument("--state", default=STATE_PATH,
+                    help="file that keeps the live sound across restarts ('' = start fresh every time)")
     ap.add_argument("--costs", default=None,
                     help="DSP cost table from dsp_bench.py (default: /data/plugin_costs.json, then ~/plugin_costs.json)")
     ap.add_argument("--no-dsp-meter", action="store_true",
@@ -847,7 +933,15 @@ def main():
     if hub:
         display = hub.wrap(display)      # LCD updates also go to the apps
     store = PresetStore(args.presets)
-    pedal = Pedal(engine, plugins, args.capture.split(","), args.playback.split(","), display, store, costs, meter)
+    ports = audio_io.PortStore()
+    saved_cap, saved_pb = ports.get(audio_io.card())
+    capture = (args.capture.split(",") if args.capture else saved_cap
+               or (os.environ.get("MELON_CAPTURE") or "system:capture_1").split(","))
+    playback = (args.playback.split(",") if args.playback else saved_pb
+                or (os.environ.get("MELON_PLAYBACK") or "system:playback_1,system:playback_2").split(","))
+    print(f"Audio: {audio_io.card()} {audio_io.card_info()}  in {','.join(capture)}  out {','.join(playback)}")
+    pedal = Pedal(engine, plugins, capture, playback, display, store, costs, meter)
+    pedal.ports = ports
     pedal_ref.append(pedal)
     if hub:
         try:
@@ -859,9 +953,14 @@ def main():
     print(f"{sum(1 for p in store.slots if p)} presets in {args.presets}")
     print(f"press: A = bypass, B = next page, C = block on/off, D = next plugin | "
           f"hold B = next block, hold C = save, hold D = presets   (press CCs A-D: {PRESS_CC})")
+    keeper = StateKeeper(args.state, pedal) if args.state and not args.fake else None
     with pedal.lock:
-        if not (args.preset and pedal.load_preset(args.preset - 1)):
+        if args.preset and pedal.load_preset(args.preset - 1):
+            pass
+        elif args.plugin or not (keeper and pedal.restore(keeper.read())):
             pedal.load(start)
+    if keeper:
+        keeper.start()
 
     if meter:
         def dsp_header():

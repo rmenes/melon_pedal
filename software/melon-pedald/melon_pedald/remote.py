@@ -4,7 +4,7 @@ JSON lines over TCP, local only (127.0.0.1:5601). One JSON object per line.
 
   app -> pedal   {"op": ...}
     hello        {"op":"hello","app":"android","proto":1}   -> hello, plugins, presets, plugin, state
-    get          {"op":"get","what":"all"|"state"|"plugin"|"plugins"|"presets"}
+    get          {"op":"get","what":"all"|"state"|"plugin"|"plugins"|"presets"|"audio"}
     set          {"op":"set","gen":3,"i":5,"v":-2.5}        parameter i of the selected block's plugin
     bypass       {"op":"bypass","on":true}                   ("on" missing = toggle)
     page         {"op":"page","n":2}                         knob page on the pedal (0-based)
@@ -19,6 +19,9 @@ JSON lines over TCP, local only (127.0.0.1:5601). One JSON object per line.
     save_preset  {"op":"save_preset","slot":0,"name":"Crunch"}
     lib_list     {"op":"lib_list","gen":3,"i":8,"folder":"Marshall"}  folder of a library control ("" = top)
     set_file     {"op":"set_file","gen":3,"i":8,"path":"Marshall/JCM800.nam"}   path null = no file
+    audio_set    {"op":"audio_set","in":"1+2","out":"3+4"}   inputs / outputs of the interface (either may be
+                                                             missing); ids from ev "audio". Instant, remembered
+                                                             per interface
     wifi_status  {"op":"wifi_status"}                        -> ev "wifi" (status, saved)
     wifi_scan    {"op":"wifi_scan"}                          -> ev "wifi" (busy, then networks)
     wifi_connect {"op":"wifi_connect","ssid":"Studio","password":"...","hidden":false}
@@ -40,6 +43,10 @@ JSON lines over TCP, local only (127.0.0.1:5601). One JSON object per line.
                   "dsp":{"predicted","limit","load","peak","xruns"}}   values/files/plugin = selected block;
                                                              i = plugin index; cost and dsp in % of the JACK period
     param        {"ev":"param","gen":3,"i":5,"v":-2.5}       a knob, MIDI or another app moved it
+    audio        {"ev":"audio","card":"Sono","info":"USB-Audio - Audient Sono (12 in / 4 out)",
+                  "inputs":[{"id":"1","label":"In 1","stereo":false},{"id":"1+2",...}],
+                  "outputs":[{"id":"1+2","label":"Out 1+2","stereo":true},...],"in":"1","out":"1+2"}
+                 sent after hello, on get "audio", and whenever the inputs / outputs change
     bypass       {"ev":"bypass","on":true}
     lib_list     {"ev":"lib_list","gen":3,"i":8,"folder":"Marshall","dirs":[["Plexi",12],...],
                   "files":["JCM800.nam",...],"current":"Marshall/JCM800.nam"|null,"total":24}
@@ -238,6 +245,15 @@ class RemoteHub:
         return {"ev": "plugin", "gen": self.gen, "i": p.idx, "name": pl.name, "uri": pl.uri,
                 "controls": [control_info(c, self._lib_name(c)) for c in pl.controls]}
 
+    def msg_audio(self):
+        from . import audio_io
+        p = self.pedal
+        ins, outs = p.io_options()
+        cur_in, cur_out = p.io_current()
+        strip = lambda opts: [{"id": o["id"], "label": o["label"], "stereo": o["stereo"]} for o in opts]  # noqa: E731
+        return {"ev": "audio", "card": audio_io.card(), "info": audio_io.card_info(),
+                "inputs": strip(ins), "outputs": strip(outs), "in": cur_in, "out": cur_out}
+
     def _lib_name(self, c):
         from .library import LIB_PARAMS
         return LIB_PARAMS.get(c.short_id) if self.pedal.lib_of(c) is not None else None
@@ -303,13 +319,14 @@ class RemoteHub:
             with p.lock:
                 if op == "hello":
                     client.send({"ev": "hello", "proto": PROTO, "name": self.name, "version": VERSION,
-                                 "features": ["chain"]})
-                    for m in (self.msg_plugins(), self.msg_presets(), self.msg_plugin(), self.msg_state()):
+                                 "features": ["chain", "audio"]})
+                    for m in (self.msg_plugins(), self.msg_presets(), self.msg_plugin(), self.msg_state(),
+                              self.msg_audio()):
                         client.send(m)
                 elif op == "get":
                     what = msg.get("what", "all")
                     makers = {"plugins": self.msg_plugins, "presets": self.msg_presets,
-                              "plugin": self.msg_plugin, "state": self.msg_state}
+                              "plugin": self.msg_plugin, "state": self.msg_state, "audio": self.msg_audio}
                     for k, make in makers.items():
                         if what in ("all", k):
                             client.send(make())
@@ -357,6 +374,10 @@ class RemoteHub:
                     client.send(self._lib_list(msg))
                 elif op == "set_file":
                     self._set_file(msg)
+                elif op == "audio_set":
+                    p.set_io(msg.get("in"), msg.get("out"))
+                    if p.mode == "browse" and p.tab == "audio":
+                        p.show_menu()
                 else:
                     client.send({"ev": "error", "msg": f"unknown op {op!r}"})
         except Exception as e:      # a bad message must never take the pedal down
@@ -476,6 +497,10 @@ class _HubDisplay:
     def files(self, pedal):
         self._d.files(pedal)
         self._hub.mode_changed()
+
+    def audio(self, pedal):
+        self._d.audio(pedal)
+        self._hub.broadcast(self._hub.msg_audio())
 
     def notice(self, text):
         self._d.notice(text)

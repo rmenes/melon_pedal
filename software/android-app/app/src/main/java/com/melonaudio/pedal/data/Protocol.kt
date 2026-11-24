@@ -149,6 +149,7 @@ data class WifiStatus(
     val signal: Int?,             // 0-100
     val ip: String?,
     val hostname: String?,
+    val user: String? = null,     // account on the pedal, for "ssh user@ip"
 )
 
 data class WifiNetwork(val ssid: String, val signal: Int, val secure: Boolean, val known: Boolean, val active: Boolean)
@@ -161,6 +162,19 @@ data class WifiState(
     val networks: List<WifiNetwork>? = null,   // null until the first scan
     val busy: String? = null,                  // "Scanning…", "Connecting to X…"
     val result: WifiResult? = null,
+)
+
+/** One input or output choice of the audio interface (ev "audio"): "In 1", "In 1+2", "Out 3+4"… */
+data class IoOption(val id: String, val label: String, val stereo: Boolean)
+
+/** Inputs / outputs of the interface the pedal runs on (melon_pedald/audio_io.py). */
+data class AudioIo(
+    val card: String,                 // "Sono", "AMS22", "sndrpihifiberry"…
+    val info: String,                 // "USB-Audio - Audient Sono (12 in / 4 out)"
+    val inputs: List<IoOption>,
+    val outputs: List<IoOption>,
+    val input: String,                // id of the input in use
+    val output: String,               // id of the output in use
 )
 
 data class PedalState(
@@ -185,6 +199,8 @@ data class PedalState(
     val synced: Boolean = false,          // got the first full state after connecting
     val error: String? = null,
     val wifi: WifiState = WifiState(),
+    val audioSupported: Boolean = false,      // pedal can choose inputs / outputs (hello "features")
+    val audio: AudioIo? = null,
 ) {
     fun slotLabel(slot: Int) = "${slot / bankSize + 1}-${"%02d".format(slot % bankSize + 1)}"
 
@@ -217,6 +233,13 @@ object Protocol {
     fun blockOn(b: Int, on: Boolean) = op("block_on").put("b", b).put("on", on).toString()
     fun selectBlock(b: Int) = op("select_block").put("b", b).toString()
 
+    fun getAudio() = op("get").put("what", "audio").toString()
+    /** Use input [input] and/or output [output] (ids from AudioIo); null = leave as it is. */
+    fun audioSet(input: String?, output: String?) = op("audio_set").apply {
+        input?.let { put("in", it) }
+        output?.let { put("out", it) }
+    }.toString()
+
     fun wifiStatus() = op("wifi_status").toString()
     fun wifiScan() = op("wifi_scan").toString()
     fun wifiConnect(ssid: String, password: String?, hidden: Boolean) =
@@ -235,6 +258,7 @@ object Protocol {
                 signal = if (st.isNull("signal")) null else st.optInt("signal"),
                 ip = optStr(st, "ip"),
                 hostname = optStr(st, "hostname"),
+                user = optStr(st, "user"),
             ))
         }
         o.optJSONArray("saved")?.let { arr -> n = n.copy(saved = (0 until arr.length()).map { arr.optString(it) }) }
@@ -320,8 +344,9 @@ object Protocol {
         return when (o.optString("ev")) {
             "hello" -> {
                 val f = o.optJSONArray("features")
-                val chain = f != null && (0 until f.length()).any { f.optString(it) == "chain" }
-                s.copy(pedalName = o.optString("name", s.pedalName), chainSupported = chain)
+                val has = { name: String -> f != null && (0 until f.length()).any { f.optString(it) == name } }
+                s.copy(pedalName = o.optString("name", s.pedalName), chainSupported = has("chain"),
+                       audioSupported = has("audio"))
             }
             "plugins" -> {
                 val arr = o.optJSONArray("list") ?: JSONArray()
@@ -392,6 +417,20 @@ object Protocol {
                         total = o.optInt("total"),
                     ),
                 )
+            }
+            "audio" -> {
+                fun opts(arr: JSONArray?) = if (arr == null) emptyList() else (0 until arr.length()).map {
+                    val x = arr.getJSONObject(it)
+                    IoOption(x.optString("id"), x.optString("label"), x.optBoolean("stereo"))
+                }
+                s.copy(audio = AudioIo(
+                    card = o.optString("card"),
+                    info = o.optString("info"),
+                    inputs = opts(o.optJSONArray("inputs")),
+                    outputs = opts(o.optJSONArray("outputs")),
+                    input = o.optString("in"),
+                    output = o.optString("out"),
+                ))
             }
             "bypass" -> s.copy(bypass = o.optBoolean("on"))
             "wifi" -> s.copy(wifi = applyWifi(s.wifi, o))

@@ -22,6 +22,13 @@ usermod -aG audio "$RUN_USER"
 
 install -d /usr/local/lib/melon-pedal
 install -m 755 "$HERE/start-jack.sh" "$HERE/cpu-performance.sh" /usr/local/lib/melon-pedal/
+install -m 755 "$HERE/melon-audio.py" /usr/local/lib/melon-pedal/melon-audio
+install -d /etc/melon-pedal/audio.d
+for f in "$HERE"/audio.d/*.conf; do
+    [ -e "/etc/melon-pedal/audio.d/$(basename "$f")" ] || cp "$f" /etc/melon-pedal/audio.d/
+done
+install -m 644 "$HERE/90-melon-audio.rules" /etc/udev/rules.d/
+udevadm control --reload
 [ -f /etc/default/melon-pedal ] || cp "$HERE/melon-pedal.default" /etc/default/melon-pedal
 
 for u in melon-jack melon-modhost melon-pedald; do

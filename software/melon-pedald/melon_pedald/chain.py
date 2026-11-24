@@ -27,7 +27,7 @@ CATEGORIES = {
     "dirt": "drive", "muffs": "drive",
     "nam": "amp",
     "cab": "cab",
-    "chorus": "mod", "flanger": "mod", "multimod": "mod",
+    "chorus": "mod", "flanger": "mod", "multimod": "mod", "trem": "mod",
     "delay2290": "delay", "multidelay": "delay",
     "reverberare": "reverb",
     "graphiceq": "eq", "proeq": "eq",
