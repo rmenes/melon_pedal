@@ -3,7 +3,7 @@ Core,Raspberry Pi 4 Model B 8 GB,1,-,Already owned.
 Core,HiFiBerry DAC2 ADC Pro,1,Not on AliExpress: buy from hifiberry.com,Official store only; avoid clones. Check shipping to Brazil and import tax.
 Core,"USB 3 flash drive, 128 GB, low-profile (Samsung FIT Plus or SanDisk Ultra Fit)",1,Buy locally (official store),Bought (128 GB, room for growth). Replaces the microSD card: boot disk and file system. Use a blue USB 3 port. AliExpress USB sticks are very often fake.
 Core,"9 V 1.5 A power adapter, centre-negative, 5.5×2.1 mm",1,9V 1.5A power supply center negative 5.5x2.1 guitar pedal,Bivolt 100–240 V with Brazilian plug. 2 A is also fine.
-Controls,"2.0"" IPS TFT 240×320, ST7789, SPI",1,2.0 inch IPS TFT ST7789 240x320 SPI,Module with pins (no touch needed).
+Controls,"2.8"" TFT 320×240, ILI9341, SPI",1,2.8 inch TFT ILI9341 240x320 SPI module,"Board 86×50 mm, 14-pin header. Touch optional (not used yet). IPS version looks better. (Replaces the 2.0"" ST7789, v0.5.)"
 Controls,"EC11 rotary encoder with push switch, 20 mm D shaft",6,EC11 rotary encoder switch 20mm D shaft,4 + 2 spare.
 Controls,Knobs for 6 mm D shaft,4,guitar pedal knob 6mm D shaft,About 15 mm tall.
 Controls,"Soft-touch momentary footswitch, SPST",2,soft touch momentary footswitch guitar pedal,"Momentary, normally open (not latching). 1 spare."
