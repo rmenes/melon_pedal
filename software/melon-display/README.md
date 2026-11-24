@@ -1,6 +1,6 @@
 # melon-display — the pedal's LCD GUI
 
-Draws the screens from [docs/lcd-gui-design.md](../../docs/lcd-gui-design.md) on the 2.0" ST7789 (320×240 landscape). It runs as its own systemd service. The controller sends it the current state as small JSON messages, and the screen updates within ~50 ms. If the display service stops or crashes, the controller and the audio keep running.
+Draws the screens from [docs/lcd-gui-design.md](../../docs/lcd-gui-design.md) on the 2.0" ST7789 (320×240 landscape). Hardware v0.5 moves to a 2.8" ILI9341 with the same resolution: the screens stay the same, but `st7789.py` needs an ILI9341 start-up sequence (to do). It runs as its own systemd service. The controller sends it the current state as small JSON messages, and the screen updates within ~50 ms. If the display service stops or crashes, the controller and the audio keep running.
 
 ```
 controller (knobs, mod-host, presets) ──JSON over UDP 127.0.0.1:5600──► melon-display ──SPI──► ST7789

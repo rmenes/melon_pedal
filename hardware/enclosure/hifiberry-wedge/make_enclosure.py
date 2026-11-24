@@ -72,20 +72,22 @@ def z_under(y):
 
 # --- lid: controls. Positions are (x, y) seen from straight above ------
 # Knob order matches the LCD tiles: 1 front-left, 2 front-right, 3 back-left, 4 back-right
-KNOBS = [(-30.0, -5.0), (30.0, -5.0), (-30.0, 38.0), (30.0, 38.0)]
+# v0.3 layout (2026-11-24): 2.8" screen in the middle, the four knobs in a 2 x 2 grid at the back (like the PoC)
+KNOBS = [(-24.0, 33.0), (24.0, 33.0), (-24.0, 55.0), (24.0, 55.0)]
 ENC_HOLE = 7.6            # EC11 M7 bushing
 ENC_POCKET = 13.6         # square pocket under the lid for the EC11 body -> lid is 2 mm there
 ENC_LID_T = 2.0
-FOOT_XY = (0.0, -44.0)
+FOOT_XY = (0.0, -50.0)
 FOOT_HOLE = 12.4          # soft-touch footswitch, 12 mm thread
-LED_XY = (0.0, -24.0)
+LED_XY = (0.0, -35.0)
 LED_HOLE = 6.2            # 3 mm LED chrome bezel (check yours: 5.0-6.5)
-LCD_C = (0.0, 16.5)       # LCD window centre
-LCD_VIEW = (42.0, 32.0)   # visible window (2.0" ST7789 active area 40.8 x 30.6, landscape)
-LCD_BEZEL = (46.0, 36.0)  # outer recess around the window
+LCD_C = (0.0, -3.0)       # LCD window centre
+LCD_VIEW = (58.0, 44.0)   # visible window (2.8" ILI9341 active area 57.6 x 43.2, landscape)
+LCD_BEZEL = (62.0, 48.0)  # outer recess around the window
 LCD_BEZEL_DEPTH = 1.0
-LCD_POCKET = (42.0, 32.0) # pocket under the lid for the glass; set to your module's glass size
-KNOB_NUMBER_DY = -14.5    # knob number position relative to the knob
+LCD_POCKET = (70.0, 51.0) # pocket under the lid for the glass (panel ~69.3 x 50.2); set to your module's glass size
+KNOB_NUMBER_DX = 11.5     # knob number beside the knob, on the outer side (x sign of the knob)
+KNOB_NUMBER_DY = 0.0
 LID_SCREWS = [(-44.0, -61.5), (44.0, -61.5), (-44.0, 59.5), (44.0, 59.5)]  # on the top surface
 LID_SCREW_HOLE = 3.4
 LID_SCREW_HEAD = (6.6, 1.6)   # counterbore diameter, depth (M3 button head sits flush)
@@ -154,7 +156,7 @@ LID_PARTS = {
     "encoder 2": (*KNOBS[1], 13.6, 13.6, 13.0),
     "encoder 3": (*KNOBS[2], 13.6, 13.6, 13.0),
     "encoder 4": (*KNOBS[3], 13.6, 13.6, 13.0),
-    "LCD module": (*LCD_C, 52.0, 38.0, 7.0),
+    "LCD module": (*LCD_C, 86.0, 50.0, 8.7),     # 2.8" ILI9341 board 86 x 50 x 8.7
     "footswitch": (*FOOT_XY, 14.0, 14.0, 25.0),
     "LED": (*LED_XY, 6.0, 6.0, 8.0),
 }
@@ -416,7 +418,7 @@ def lid():
     shanks = [circle(*P(x, y), LID_SCREW_HOLE) for x, y in LID_SCREWS]
     numbers = []
     for i, (x, y) in enumerate(KNOBS):
-        numbers += text_rings(str(i + 1), *P(x, y + KNOB_NUMBER_DY), 4.0)
+        numbers += text_rings(str(i + 1), *P(x + math.copysign(KNOB_NUMBER_DX, x), y + KNOB_NUMBER_DY), 4.0)
     pockets = [rrect(*P(x, y), ENC_POCKET, ENC_POCKET, 1.5) for x, y in KNOBS]
     pockets += [circle(*P(*FOOT_XY), FOOT_HOLE), circle(*P(*LED_XY), LED_HOLE), rrect(*P(*LCD_C), *LCD_POCKET, 1.0)]
 

@@ -2,7 +2,7 @@
 
 Design canvas (all screens, drawn at real 320×240 px, shown at 2×): https://claude.ai/artifact/7KPNGRSwvnVB6dZnkezoXJ · sources in [software/ui-design/](../software/ui-design/)
 
-Display: 2.0" ST7789, used **landscape 320×240** (≈ 7.9 px/mm). Drawn by `melon-pedald`'s `display` module with Pillow, pushed over SPI ([software architecture §4](software-architecture.md#4-melon-pedald-the-pedal-controller)). **This doc supersedes software architecture §5 where they differ.**
+Display: 2.0" ST7789, used **landscape 320×240** (≈ 7.9 px/mm). **From hardware v0.5: 2.8" ILI9341, same 320×240** (≈ 5.6 px/mm, everything 1.4× larger on the panel; no layout change). Drawn by `melon-pedald`'s `display` module with Pillow, pushed over SPI ([software architecture §4](software-architecture.md#4-melon-pedald-the-pedal-controller)). **This doc supersedes software architecture §5 where they differ.**
 
 ---
 

@@ -1,7 +1,8 @@
-# Melon Effects Pedal — Hardware Architecture (v0.4)
+# Melon Effects Pedal — Hardware Architecture (v0.5)
 
 Raspberry Pi 4 Model B (8 GB) running Raspberry Pi OS, hosting Melon Plugins (LV2).
 
+**v0.5 changes (2026-11-24):** bigger **2.8" ILI9341 SPI screen (320×240, same resolution as before)** in the middle of the lid · the **four knobs move to a 2 × 2 grid at the back** (like the PoC) · footswitch and LED move forward. Enclosure generator updated (`hardware/enclosure/hifiberry-wedge`, v0.3 layout).
 **v0.4 changes (2026-11-17):** the Pi's micro-SD slot is broken → **boot + file system on a low-profile USB 3 flash drive (128 GB, bought)** · USB ports now reached through a **required side-wall cut-out** · power budget updated.
 **v0.3:** all connectors **top-mounted** (back edge) for pedalboard use: IN, OUT, MIDI IN, MIDI OUT, DC · new **I/O board** carrying all jacks + analog + MIDI + power · Pi rotated 90° · enclosure ~100 W × 135 L × 65 H mm.
 **v0.2:** stereo TRS in/out · 3.5 mm TRS MIDI (Type A) · encoders · 9 V / 1.5 A supply checked.
@@ -21,7 +22,7 @@ Raspberry Pi 4 Model B (8 GB) running Raspberry Pi OS, hosting Melon Plugins (LV
 | Bypass | 2 × DPDT signal relays (one per channel), unpowered = true bypass |
 | MIDI | MIDI IN + MIDI OUT on 3.5 mm TRS **Type A** (Boss standard). Pi UART3, 31 250 baud. OUT = software OUT/THRU or hardware THRU (jumper) |
 | Knobs | 4 × EC11 rotary encoders with push switch |
-| Display | 2.0" SPI TFT 240×320 ST7789 |
+| Display | **2.8" SPI TFT 320×240, ILI9341** (active area 57.6 × 43.2 mm, board 86 × 50 × 8.7 mm), landscape. Same resolution as the old 2.0" ST7789, so the screen layouts don't change; melon-display needs the ILI9341 start-up sequence |
 | GPIO expander | MCP23017 (I2C) for encoder push switches + spares |
 | Storage / boot | **128 GB low-profile USB 3 flash drive** (bought; room for growth) (Samsung FIT Plus or SanDisk Ultra Fit) in a blue USB 3 port. The Pi 4's micro-SD slot is broken and unused |
 | Power | 9 V DC centre-negative, 9 V / 1.5 A supply sufficient (worst case ≈ 1.1 A incl. USB drive) |
@@ -48,7 +49,7 @@ Raspberry Pi 4 Model B (8 GB) running Raspberry Pi OS, hosting Melon Plugins (LV
 └───────────────┬────────────────────────────────────────────────────┘
                 │ ribbon/flat cable
 ┌───────────────▼────────────────────────────────────────────────────┐
-│ CONTROL BOARD (under lid): 4 encoders, MCP23017, 2" TFT, LED       │
+│ CONTROL BOARD (under lid): 4 encoders, MCP23017, 2.8" TFT, LED     │
 └────────────────────────────────────────────────────────────────────┘
    Front: soft-touch footswitch (wired to GPIO 12)
 ```
@@ -152,7 +153,9 @@ MCP23017 (0x20): GPA0–3 = encoder switches, rest spare. Encoder A/B: 10 kΩ pu
 ## 6. Controls & display
 - Encoders: Alps EC11 / Bourns PEC11R, 20–24 detents, push, 6 mm D-shaft, on the control board under the lid.
 - Footswitch: soft-touch momentary SPST (short = bypass, long = next preset).
-- LED: 3 mm. Display: 2.0" ST7789 behind a lid window.
+- LED: 3 mm. Display: 2.8" ILI9341 (320×240) behind a lid window (58 × 44 mm), board in a 70 × 51 mm pocket under the lid.
+- Display wiring: same SPI pins as before (§5: MOSI, SCLK, CS, DC, RST, backlight). MISO is not needed. A touch version (XPT2046) works too; its touch is not used yet (it could go on the spare CE1, GPIO 7).
+- Lid layout (v0.5), measured on the top surface from the centre: footswitch (0, −50), LED (0, −35), screen centre (0, −3), knobs 1/2 (∓24, 33) and 3/4 (∓24, 55). Knob numbers are engraved beside each knob, on the outer side.
 
 ---
 
@@ -162,7 +165,7 @@ MCP23017 (0x20): GPA0–3 = encoder switches, rest spare. Encoder A/B: 10 kΩ pu
 | Load | Power |
 |---|---|
 | Pi 4, 100 % CPU (~1.28 A @ 5 V) | 6.4 W |
-| 2" TFT | 0.5 W |
+| 2.8" TFT (backlight) | 0.5 W |
 | HiFiBerry | 0.3 W |
 | 2 relays + LED | 0.3 W |
 | MCP23017, MIDI, encoders | 0.1 W |
@@ -203,14 +206,15 @@ External width 100 mm; jack centres measured from the **left** edge:
                    back edge (jacks)
         ┌──────────────────────────────────┐
         │ [ I/O BOARD ~30 mm deep ]        │  ← jacks, buffers, relays, MIDI, buck
+        │       (K3)          (K4)         │  ← knobs 2 × 2 above the I/O board
+        │       (K1)          (K2)         │
         │----------------------------------│
-        │   (K1)                  (K2)     ├─ USB cut-out (right side wall):
-        │          ┌──────────┐            │  Pi USB ports + boot drive
-        │          │  2" LCD  │            │
-        │   (K3)   └──────────┘   (K4)     │
+        │     ┌──────────────────────┐     ├─ USB cut-out (right side wall):
+        │     │   2.8" LCD 320×240   │     │  Pi USB ports + boot drive
+        │     └──────────────────────┘     │
         │----------------------------------│
         │              (LED)               │
-        │         [ FOOTSWITCH ]           │  ← front zone ~35 mm
+        │         [ FOOTSWITCH ]           │  ← front zone ~30 mm
         └──────────────────────────────────┘
                       front
 ```
@@ -221,7 +225,8 @@ External width 100 mm; jack centres measured from the **left** edge:
 - **Front zone (~35 mm):** footswitch (body ~25 mm deep) kept clear of the Pi stack.
 - **Lid:** control board (encoders, MCP23017, LCD, LED), flat cable to the Pi header area.
 - **Height check:** Pi + HAT stack ≈ 40 mm from floor; control board + encoders hang ≈ 15 mm below lid; internal height ≈ 60 mm → OK.
-- **Wedge (2026-11-17):** the lid slopes from 40 mm (front) to 65 mm (back). Tightest spot: encoder 2 over the HiFiBerry's own RCA/3.5 mm jacks (if they sit at the USB end): ~0 mm with a 13 mm deep control board. Keep the control board flat there or remove those unused jacks. Run `hardware/enclosure/hifiberry-wedge/make_enclosure.py` for the current clearance report.
+- **Wedge (2026-11-17):** the lid slopes from 40 mm (front) to 65 mm (back).
+- **Clearance with the v0.5 layout** (`make_enclosure.py --preview`): encoders 1/2 15 mm above the HiFiBerry, encoders 3/4 22 mm above the 6.35 mm jacks, footswitch 11 mm above the floor. **Tightest spot: the screen board, 2 mm above the HiFiBerry's own RCA/3.5 mm jacks** (if they sit at the USB end, to verify). Those jacks are unused (audio goes through the headers): removing them gives ~13 mm. Use wires or a right-angle header on the screen board, not straight pins pointing down.
 - Aluminium bottom plate, low-profile Pi heatsink, side/bottom vents, provision for a 30 mm fan.
 
 ---
@@ -235,7 +240,7 @@ Full shopping list with AliExpress search terms and spares: [hardware/bom/shoppi
 | 1 | Raspberry Pi 4 B 8 GB | micro-SD slot broken |
 | 1 | 128 GB low-profile USB 3 flash drive (Samsung FIT Plus / SanDisk Ultra Fit) | boot + file system; bought |
 | 1 | HiFiBerry DAC2 ADC Pro | |
-| 1 | 2.0" ST7789 SPI TFT 240×320 | |
+| 1 | 2.8" ILI9341 SPI TFT 320×240 (14-pin header; touch optional) | 86 × 50 mm board; e.g. Waveshare, DFRobot DFR0665, Elecrow, generic |
 | 4 | EC11 encoders with switch + knobs | |
 | 1 | MCP23017 | |
 | 1 | Soft-touch momentary footswitch | |
