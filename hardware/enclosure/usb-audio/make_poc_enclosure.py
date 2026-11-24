@@ -40,7 +40,7 @@ from scipy.spatial import Delaunay
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # =========================================================== PARAMETERS
-W, L, H = 65.0, 120.0, 40.0      # outside width, depth, height
+W, L, H = 68.0, 120.0, 40.0      # outside width, depth, height (68: the 2.0" LCD board did not fit in 65, 2026-11-24)
 HW, HL = W / 2, L / 2
 R_CORNER = 4.0                   # vertical corner radius
 WALL = 2.4                       # wall thickness (6 perimeters of 0.4)
@@ -55,13 +55,13 @@ FOOT_RING = (20.0, 3.0)                      # reinforcing ring under the top: o
 LED_XY, LED_HOLE = (0.0, -31.0), 6.0         # 3 mm LED chrome bezel (check yours)
 LCD_C = (0.0, -5.0)                          # LCD window centre
 LCD_WINDOW = (42.0, 32.0)                    # visible area (2.0" ST7789, landscape)
-LCD_POCKET = (58.5, 35.5, 1.0)               # locating pocket under the top: module board w, h, depth
+LCD_POCKET = (61.5, 35.5, 1.0)               # locating pocket under the top: module board w, h, depth (+3 mm, measured fit)
 ENC_HOLE = 7.2                               # EC11 M7 bushing
 ENCODERS = [(-14.0, 22.0), (14.0, 22.0), (-14.0, 42.0), (14.0, 42.0)]   # 1, 2 front row; 3, 4 back row
 
 # --- Pi 4 ----------------------------------------------------------------
 PI_W, PI_L = 56.0, 85.0
-PI_X0 = -PI_W / 2                            # GPIO edge (left)
+PI_X0 = -PI_W / 2 + (W - 65.0) / 2           # GPIO edge (left); shifted with the right wall so the ports keep their place
 PI_Y0 = HL - WALL - 2.6 - PI_L               # SD-card end (front); USB/Ethernet end 2.6 mm from the back wall
 STANDOFF_H, STANDOFF_D = 3.0, 6.0            # printed standoffs on the plate
 PI_T = 1.4
@@ -75,12 +75,12 @@ PILLAR_D = 5.5                               # pillars from the top down onto th
 
 # --- front corner columns with M3 heat-set inserts -------------------------
 COLUMN_D = 10.0
-COLUMNS = [(-25.5, -(HL - WALL) + 4.8), (25.5, -(HL - WALL) + 4.8)]
+COLUMNS = [(-(HW - 7.0), -(HL - WALL) + 4.8), (HW - 7.0, -(HL - WALL) + 4.8)]
 INSERT_HOLE, INSERT_DEPTH = 4.0, 6.0         # M3 x 5.7 brass inserts (check your kit: 4.0-4.2)
 M3_CLEAR, M3_HEAD = 3.4, (6.6, 1.8)
 
 # --- wall cut-outs (open at the bottom) -------------------------------------
-BACK_CUT = (-27.5, 27.5, Z_PI_TOP + 16.0 + 1.6)          # x0, x1, top z: 4 x USB + Ethernet
+BACK_CUT = (-27.5 + (W - 65.0) / 2, 27.5 + (W - 65.0) / 2, Z_PI_TOP + 16.0 + 1.6)   # x0, x1, top z: 4 x USB + Ethernet (follows the Pi)
 RIGHT_CUT = (PI_Y0 + 3.0, PI_Y0 + 48.0, Z_PI_TOP + 6.0)  # y0, y1, top z: USB-C + 2 x micro-HDMI
 
 # --- vents (vertical slots / plate slots) -----------------------------------

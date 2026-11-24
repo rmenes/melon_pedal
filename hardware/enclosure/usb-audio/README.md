@@ -14,11 +14,13 @@ Concept renders: [hero](render-poc-hero.png) · [back](render-poc-back.png) · [
 | `render_poc.py` | Concept renders (ray marcher, ~5 min per view at 1600 × 1000) |
 | `make_poc_enclosure.py` | Generator: every size is a parameter at the top. `python3 make_poc_enclosure.py --preview` (numpy, scipy, matplotlib) |
 
-**Outside:** 65 W × 120 D × 40 H mm (plate included). Inside 60.2 × 115.2 × 34.6 mm. Walls and top 2.4 mm, plate 3 mm.
+**Outside:** 68 W × 120 D × 40 H mm (plate included). Inside 63.2 × 115.2 × 34.6 mm. Walls and top 2.4 mm, plate 3 mm.
+
+**2026-11-24:** widened from 65 to 68 mm: the 2.0" LCD board (GMT020-02-7P, ~61.5 mm wide) did not fit the 60.2 mm inside width of the first print. The LCD pocket is now 61.5 mm wide, the front screw columns moved out with the walls, and the Pi moved 1.5 mm right so its USB-C/HDMI ports keep their place at the right-wall cut-out.
 
 ## Layout
 - **Top, front to back:** footswitch Ø12.2 (reinforcing ring underneath) · LED bezel Ø6.0 · 2.0" LCD window
-  42 × 32 with a 1 mm locating pocket underneath for the module board (58.5 × 35.5) · 4 × EC11 Ø7.2 in a
+  42 × 32 with a 1 mm locating pocket underneath for the module board (61.5 × 35.5) · 4 × EC11 Ø7.2 in a
   2 × 2 grid (28 mm across, 20 mm front to back; knobs 1–2 front row, 3–4 back row).
 - **Pi 4:** 85 mm side along the depth, USB/Ethernet at the back, USB-C/micro-HDMI on the right, GPIO header
   along the left wall. Board on 3 mm standoffs.
@@ -41,7 +43,7 @@ Each part is several overlapping closed shells; PrusaSlicer, OrcaSlicer, Bambu S
 (Cura: *Union overlapping volumes* on, the default).
 
 ## Measure before printing
-- **LCD module:** board size (pocket 58.5 × 35.5) and where the visible area sits on it (window centred by default).
+- **LCD module:** board size (pocket 61.5 × 35.5) and where the visible area sits on it (window centred by default).
 - **LED bezel** hole (6.0) and **footswitch** thread (12.2).
 - **Rear encoders:** their pins end about 2 mm above the Pi's USB ports. Trim or bend them and add Kapton tape.
 - **EC11 anti-rotation tab:** snap it off (no slot is printed).

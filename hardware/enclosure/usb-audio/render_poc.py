@@ -6,7 +6,7 @@ melon-display Play screen. No 3D software needed, only numpy + Pillow.
 
     python3 hardware/enclosure/usb-audio/render_poc.py [--res 1600x1000] [--ss 2] [--only hero]
 
-Geometry follows make_poc_enclosure.py (65 x 120 x 40 mm). The external USB audio interface
+Geometry follows make_poc_enclosure.py (68 x 120 x 40 mm). The external USB audio interface
 next to the pedal is a generic stand-in, not a specific product.
 
 Coordinates are millimetres: x = width (player's left is -x), y = depth (front is -y,
@@ -38,7 +38,7 @@ def font(style, size):
 
 
 # ---------------------------------------------------------------- geometry (make_poc_enclosure.py)
-W, L, H = 65.0, 120.0, 40.0
+W, L, H = 68.0, 120.0, 40.0
 HW, HL = W / 2, L / 2
 R_CORNER = 4.0
 WALL = 2.4
@@ -53,7 +53,7 @@ LCD_C = (0.0, -5.0)
 WIN_HALF = (21.0, 16.0)           # window 42 x 32
 GLASS_HALF = (20.4, 15.3)         # active area
 Z_PI_TOP = Z0 + 3.0 + 3.0 + 1.4   # plate + standoff + board
-BACK_CUT = (-27.5, 27.5, Z0 + 25.0)            # x0, x1, top z
+BACK_CUT = (-26.0, 29.0, Z0 + 25.0)            # x0, x1, top z (follows the Pi, shifted 1.5 mm right in the 68 mm box)
 RIGHT_CUT = (-27.0, 18.0, Z0 + 13.4)           # y0, y1, top z
 LEFT_VENTS_Y = [-45.0 + 5.0 * i for i in range(13)]
 RIGHT_VENTS_Y = [22.0 + 5.0 * i for i in range(6)]
@@ -201,7 +201,7 @@ def ports_sdf(p):
 
 def port_holes_sdf(p):
     """Dark openings in the port faces and the back of the pockets."""
-    d = sd_box(p, (-27.0, HL - 8.2, Z0), (27.0, HL - 7.6, BACK_CUT[2]))                 # pocket back
+    d = sd_box(p, (-25.5, HL - 8.2, Z0), (28.5, HL - 7.6, BACK_CUT[2]))                 # pocket back
     d = np.minimum(d, sd_box(p, (HW - 8.2, -26.5, Z0), (HW - 7.6, 17.5, RIGHT_CUT[2])))  # right pocket back
     x, w, h = ETH
     d = np.minimum(d, sd_box(p, (x - 6.0, PORT_FACE - 6.0, Z_PI_TOP + 2.0), (x + 6.0, PORT_FACE + 0.3, Z_PI_TOP + 11.0)))
