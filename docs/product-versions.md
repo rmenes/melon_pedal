@@ -35,4 +35,6 @@ Three versions are planned, from the simplest to the most complete. Only V1 and 
 
 **Battery:** 4 × 18650 (2S2P, ≈ 44 Wh, ≈ 5 h), in a bay with a hatch in the floor, away from the Pi's heat, with a proper 2S charger/protection module (USB-C) and a temperature sensor. A battery monitor on I2C shows % on the screen and app and shuts down cleanly when low. See [battery options](images/battery-options.png) for why a battery doesn't fit V2 without a bigger box.
 
+Concept renders: [`hardware/enclosure/v3-floor`](../hardware/enclosure/v3-floor/README.md).
+
 **Next:** confirm the screen size (assumed 121 × 76 mm module, 108 × 65 mm visible), the audio board, and the back-panel layout; then a first enclosure generator like V2's.
