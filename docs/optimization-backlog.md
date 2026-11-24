@@ -42,3 +42,14 @@ Goal: the pedal recognizes and uses any **class-compliant** USB audio interface 
 **Known limits (to state in the user documentation)**
 - Interface hardware switches can't be controlled by software (e.g. Zoom AMS DIRECT MONITOR, LOOPBACK, MUSIC/STREAMING, Hi-Z). The user must set them: direct monitor off, loopback off. Possible extra: warn when the dry input appears to leak into the output.
 - Interfaces that need a vendor driver (not class-compliant) are not supported.
+
+### Ideas from Ardor (added 2026-11-24, decided to do later)
+[Ardor](https://github.com/balazsbencs/ardor) (MIT; its FFTW part is GPL) is another Raspberry Pi 4 guitar processor: one C++20 program with built-in effects, LVGL touchscreen, Go/React web manager, Buildroot image. Compared with our plugin-host design (JACK + mod-host + LV2 + Python controller) on 2026-11-24. Decision: keep our architecture and **adopt these five features later**.
+
+1. **Seamless preset changes.** Ardor builds the new engine off the audio thread and swaps it in with a short crossfade. For us: build the new chain beside the old one in spare mod-host instances, then switch the JACK links with a ~10 ms fade, then remove the old blocks. Today a preset with different plugins rebuilds the chain and leaves a short gap (same plugins = values only, already gap-free).
+2. **Lower latency.** Ardor runs 64-frame blocks with full NAM on a Pi 4 (their bench: 64 passes, 32 fails). We run 256 × 3. Measure 128 (and 64) with the bench, per interface (`audio.d/<card>.conf`); see `dsp-budget.md` §7.
+3. **Callback timing stats.** Ardor counts over-budget callbacks, gaps and the worst callback time. Add the same to the DSP meter (LCD header, app): worst period time and late callbacks, next to the xrun count.
+4. **Scenes.** Four named parameter snapshots inside a preset (values, block on/off, a level trim), recalled from the footswitches without rebuilding the chain, switched instantly or over 0.1–10 s. Delay/reverb can "let ring" when bypassed.
+5. **Buildroot / read-only root.** A reproducible firmware image with a read-only root and a writable data partition, so pulling the plug can't corrupt the system (our software architecture already plans a read-only root + `/data`).
+
+Not planned: Ardor's compiled-in effects and cloud service (we keep LV2 plugins and the Bluetooth app).
