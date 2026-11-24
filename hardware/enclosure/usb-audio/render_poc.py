@@ -6,7 +6,7 @@ melon-display Play screen. No 3D software needed, only numpy + Pillow.
 
     python3 hardware/enclosure/usb-audio/render_poc.py [--res 1600x1000] [--ss 2] [--only hero]
 
-Geometry follows make_poc_enclosure.py (68 x 120 x 40 mm). The external USB audio interface
+Geometry follows make_poc_enclosure.py (72 x 120 x 40 mm). The external USB audio interface
 next to the pedal is a generic stand-in, not a specific product.
 
 Coordinates are millimetres: x = width (player's left is -x), y = depth (front is -y,
@@ -38,7 +38,7 @@ def font(style, size):
 
 
 # ---------------------------------------------------------------- geometry (make_poc_enclosure.py)
-W, L, H = 68.0, 120.0, 40.0
+W, L, H = 72.0, 120.0, 40.0
 HW, HL = W / 2, L / 2
 R_CORNER = 4.0
 WALL = 2.4
@@ -53,10 +53,11 @@ LCD_C = (0.0, -5.0)
 WIN_HALF = (21.0, 16.0)           # window 42 x 32
 GLASS_HALF = (20.4, 15.3)         # active area
 Z_PI_TOP = Z0 + 3.0 + 3.0 + 1.4   # plate + standoff + board
-BACK_CUT = (-26.0, 29.0, Z0 + 25.0)            # x0, x1, top z (follows the Pi, shifted 1.5 mm right in the 68 mm box)
-RIGHT_CUT = (-27.0, 18.0, Z0 + 13.4)           # y0, y1, top z
+BACK_CUT = (-27.5, 27.5, Z0 + 25.0)            # x0, x1, top z (Pi centred in the 72 mm box)
+PI_RIGHT = 28.0                                # right edge of the Pi board
+RIGHT_CUT = (-27.0, 18.0, Z0 + 14.9)           # y0, y1, top z
 LEFT_VENTS_Y = [-45.0 + 5.0 * i for i in range(13)]
-RIGHT_VENTS_Y = [22.0 + 5.0 * i for i in range(6)]
+RIGHT_VENTS_Y = [22.0, 27.0, 32.0, 37.0, 52.0]   # gap at the rear wall boss
 # Pi 4 ports seen from behind (GPIO on the left): Ethernet, USB 3 (blue), USB 2
 ETH = (-17.75, 16.0, 13.5)         # x centre, width, height
 USB3 = (1.0, 13.1, 16.0)
@@ -195,13 +196,13 @@ def ports_sdf(p):
         dd = sd_box(p, (x - w / 2, PORT_FACE - 10.0, Z_PI_TOP), (x + w / 2, PORT_FACE, Z_PI_TOP + h))
         d = dd if d is None else np.minimum(d, dd)
     for y, w in [(USBC_Y, 9.0)] + [(yy, 7.0) for yy in HDMI_YS]:
-        d = np.minimum(d, sd_round_box(p, (HW - WALL - 3.5, y, CONN_Z), (3.5, w / 2, 1.7), 0.8))
+        d = np.minimum(d, sd_round_box(p, (PI_RIGHT - 2.5, y, CONN_Z), (3.5, w / 2, 1.7), 0.8))
     return d
 
 
 def port_holes_sdf(p):
     """Dark openings in the port faces and the back of the pockets."""
-    d = sd_box(p, (-25.5, HL - 8.2, Z0), (28.5, HL - 7.6, BACK_CUT[2]))                 # pocket back
+    d = sd_box(p, (-27.0, HL - 8.2, Z0), (27.0, HL - 7.6, BACK_CUT[2]))                 # pocket back
     d = np.minimum(d, sd_box(p, (HW - 8.2, -26.5, Z0), (HW - 7.6, 17.5, RIGHT_CUT[2])))  # right pocket back
     x, w, h = ETH
     d = np.minimum(d, sd_box(p, (x - 6.0, PORT_FACE - 6.0, Z_PI_TOP + 2.0), (x + 6.0, PORT_FACE + 0.3, Z_PI_TOP + 11.0)))
@@ -209,7 +210,7 @@ def port_holes_sdf(p):
         for zc in (Z_PI_TOP + 4.0, Z_PI_TOP + 12.0):
             d = np.minimum(d, sd_box(p, (x - 6.0, PORT_FACE - 6.0, zc - 2.6), (x + 6.0, PORT_FACE + 0.3, zc + 2.6)))
     for y, w in [(USBC_Y, 9.0)] + [(yy, 7.0) for yy in HDMI_YS]:
-        d = np.minimum(d, sd_box(p, (HW - WALL - 0.5, y - w / 2 + 1.2, CONN_Z - 0.9), (HW - WALL + 0.3, y + w / 2 - 1.2, CONN_Z + 0.9)))
+        d = np.minimum(d, sd_box(p, (PI_RIGHT + 0.5, y - w / 2 + 1.2, CONN_Z - 0.9), (PI_RIGHT + 1.3, y + w / 2 - 1.2, CONN_Z + 0.9)))
     return d
 
 
@@ -258,7 +259,7 @@ def scene(p, want_mat=False):
     plastic = sd_round_box(p, (USB3[0], PORT_FACE + 9.0, Z_PI_TOP + 4.0), (6.2, 9.5, 2.6), 1.0)      # USB stick
     plastic = np.minimum(plastic, sd_round_box(p, (USB2[0], PORT_FACE + 8.0, Z_PI_TOP + 12.0 - 8.0),  # USB-A plug (lower port)
                                                 (6.8, 8.5, 3.6), 1.4))
-    plastic = np.minimum(plastic, sd_round_box(p, (HW + 7.0, USBC_Y, CONN_Z), (7.0, 4.6, 3.0), 1.4))  # USB-C plug
+    plastic = np.minimum(plastic, sd_round_box(p, (HW + 5.0, USBC_Y, CONN_Z), (9.0, 4.6, 3.0), 1.4))  # USB-C plug
     plastic = np.minimum(plastic, sd_round_box(p, (IFACE_C[0] - IFACE_HALF[0] - 7.0, IFACE_C[1] - 8.0, 12.0),
                                                (7.0, 5.0, 3.2), 1.2))                                   # USB-B at interface
     plastic = np.minimum(plastic, sd_cyl(p, (IFACE_C[0] - 14.0, IFACE_C[1] - IFACE_HALF[1] - 18.0, 11.0), 1, 4.6, 15.5, 1.0))  # 1/4" plug
