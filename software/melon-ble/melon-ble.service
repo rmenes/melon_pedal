@@ -1,6 +1,8 @@
 [Unit]
 Description=Melon Pedal: Bluetooth LE bridge for the phone app
-After=bluetooth.service melon-pedald.service
+# not ordered after melon-pedald: the bridge reconnects to it by itself, and Bluetooth must work
+# even when the audio side is down
+After=bluetooth.service
 Wants=bluetooth.service
 PartOf=melon-pedal.target
 StartLimitIntervalSec=0

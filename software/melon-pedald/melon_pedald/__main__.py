@@ -941,6 +941,9 @@ def main():
                 or (os.environ.get("MELON_PLAYBACK") or "system:playback_1,system:playback_2").split(","))
     print(f"Audio: {audio_io.card()} {audio_io.card_info()}  in {','.join(capture)}  out {','.join(playback)}")
     pedal = Pedal(engine, plugins, capture, playback, display, store, costs, meter)
+    if audio_io.card() == "none":
+        print("! no audio interface: running silent (JACK dummy driver) until one is plugged in")
+        display.notice("No audio interface - plug one in")
     pedal.ports = ports
     pedal_ref.append(pedal)
     if hub:
