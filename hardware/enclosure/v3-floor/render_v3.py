@@ -65,16 +65,20 @@ def to_flat(p):
     return q
 
 
-KNOBS = [flat((x, -22.0)) for x in (-75.0, -25.0, 25.0, 75.0)]       # encoders 1-4 (edit the screen)
-# output section right of the screen: pots, absolute position (x, y, cap radius, label, pointer angle)
-OUT_KNOBS = [(flat((80.0, 68.0)), 7.0, "TREBLE", 100), (flat((80.0, 45.0)), 7.0, "MID", 80),
-             (flat((80.0, 22.0)), 7.0, "BASS", 95), (flat((104.5, 40.0)), 8.5, "VOLUME", 20)]
-ALL_KNOBS = [(k, 7.6, a) for k, a in zip(KNOBS, (-40, 25, 70, 140))] + [(k, r, a) for k, r, _, a in OUT_KNOBS]
+SCREEN_X = -40.0                  # screen on the left, output section on the right (2026-11-25)
+KNOB_R, VOL_R = 7.6, 9.8          # stepped knobs: skirt radius (the upper cap is 0.64 x that)
+# encoders 1-4 under the screen: the outer edge of the first and last washers stays inside the window width
+ENC_SPAN = 55.75 - (KNOB_R + 0.9) - 0.5
+KNOBS = [flat((SCREEN_X + ENC_SPAN * t, -22.0)) for t in (-1.0, -1 / 3, 1 / 3, 1.0)]
+# output section: EQ in a horizontal row, a bigger VOLUME below it (x, y, skirt radius, label, pointer angle)
+OUT_KNOBS = [(flat((50.0, 60.0)), KNOB_R, "BASS", 95), (flat((73.0, 60.0)), KNOB_R, "MID", 80),
+             (flat((96.0, 60.0)), KNOB_R, "TREBLE", 100), (flat((73.0, 22.0)), VOL_R, "VOLUME", 20)]
+ALL_KNOBS = [(k, KNOB_R, a) for k, a in zip(KNOBS, (-40, 25, 70, 140))] + [(k, r, a) for k, r, _, a in OUT_KNOBS]
 FOOTS = [flat((x, -62.0)) for x in (-90.0, -30.0, 30.0, 90.0)]
 LEDS = [flat((x, -46.0)) for x in (-90.0, -30.0, 30.0, 90.0)]
 # Raspberry Pi Touch Display 2, 5": outline 143.5 x 91.5 x 16 mm (under the lid), viewing area 111.5 x 63,
 # active 110.4 x 62.1, 720 x 1280 used in landscape. Glass close to the surface so a finger reaches the edges.
-LCD_C = flat((0.0, 35.0))         # window centre (flat frame)
+LCD_C = flat((SCREEN_X, 35.0))    # window centre (flat frame)
 PANEL_HALF = (71.75, 45.75)       # module outline (inside, for clearance only)
 LCD_HALF = (59.0, 34.5)           # 1 mm chamfered recess around the window
 WIN_HALF = (55.75, 31.5)          # window = viewing area
@@ -196,14 +200,17 @@ def scene(p, want_mat=False):
     metal = np.maximum(metal, -hole)
     ds.append(metal)
     p = pf
-    # knobs (black, knurled skirt)
+    # stepped knobs (black): wide smooth skirt, narrower knurled cap on top
     knob = None
     for (kx, ky), r, _ in ALL_KNOBS:
         u, v = p[:, 0] - kx, p[:, 1] - ky
         ang = np.arctan2(v, u)
-        hk = 14.0 * r / 7.6
-        knurl = 0.22 * np.cos(30 * ang) * (p[:, 2] < ZT + hk - 2.5)
-        kd = sd_cyl(p, (kx, ky, ZT + 1.2), 2, r, hk, 1.6) + knurl
+        hs, hc = 4.2 * r / 7.6, 10.5 * r / 7.6               # skirt height, cap height
+        skirt = sd_cyl(p, (kx, ky, ZT + 1.2), 2, r, hs, 0.9)
+        zc = ZT + 1.2 + hs - 0.5
+        knurl = 0.2 * np.cos(24 * ang) * (p[:, 2] < zc + hc - 1.8)
+        cap = sd_cyl(p, (kx, ky, zc), 2, 0.64 * r, hc, 1.3) + knurl
+        kd = np.minimum(skirt, cap)
         knob = kd if knob is None else np.minimum(knob, kd)
     ds.append(knob)
     # LCD glass (under the window, behind the 3 mm lid)
@@ -272,30 +279,24 @@ def make_top_texture():
     cream = CREAM + (255,)
     f_big = font("Bold", int(9.0 * TEX_PX))
     f_small = font("Medium", int(3.0 * TEX_PX))
-    cx, cy = xy(-90.0, 50.0 / CA)
+    cx, cy = xy(70.0, -17.0 / CA)
     dr.text((cx, cy), "MELON", font=f_big, fill=cream, anchor="mm")
-    cx, cy = xy(-90.0, 38.0 / CA)
-    dr.text((cx, cy), "6 IN · 8 OUT · LV2", font=f_small, fill=CREAM + (200,), anchor="mm")
-    cx, cy = xy(-90.0, 22.0 / CA)
-    dr.text((cx, cy), "V3", font=font("Bold", int(7.0 * TEX_PX)), fill=CREAM + (150,), anchor="mm")
+    cx, cy = xy(70.0, -28.0 / CA)
+    dr.text((cx, cy), "V3  ·  6 IN · 8 OUT · LV2", font=f_small, fill=CREAM + (200,), anchor="mm")
     f_num = font("SemiBold", int(3.4 * TEX_PX))
     for (kx, ky), kr, _ in ALL_KNOBS:
         cx, cy = xy(kx, ky)
-        r = (kr + 2.2) * TEX_PX
+        r = (kr + 2.0) * TEX_PX
         for a in np.linspace(np.radians(-225), np.radians(45), 11):
             x0, y0 = cx + r * np.cos(a), cy + r * np.sin(a)
             x1, y1 = cx + (r + 1.6 * TEX_PX) * np.cos(a), cy + (r + 1.6 * TEX_PX) * np.sin(a)
             dr.line((x0, y0, x1, y1), fill=CREAM + (170,), width=int(0.45 * TEX_PX))
     f_lab = font("SemiBold", int(2.9 * TEX_PX))
     for (kx, ky), kr, label, _ in OUT_KNOBS:
-        if label == "VOLUME":
-            tx, ty = xy(kx, ky - kr - 7.5)
-        else:
-            tx, ty = xy(kx - kr - 10.0, ky)
-        dr.text((tx, ty), label, font=f_lab if label == "VOLUME" else font("SemiBold", int(2.4 * TEX_PX)),
-                fill=cream, anchor="mm")
-    # output section title
-    tx, ty = xy(104.5, 70.0)
+        tx, ty = xy(kx, ky - kr - 7.0)
+        dr.text((tx, ty), label, font=f_lab, fill=cream, anchor="mm")
+    # output section title + a thin line between EQ and volume
+    tx, ty = xy(73.0, 77.0)
     dr.text((tx, ty), "OUTPUT", font=font("Bold", int(3.0 * TEX_PX)), fill=LABEL + (240,), anchor="mm")
     for i, (kx, ky) in enumerate(KNOBS):
         cx, cy = xy(kx, ky)
