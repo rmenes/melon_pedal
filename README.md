@@ -13,7 +13,7 @@ Planned from the simplest to the most complete ([details](docs/product-versions.
 | | V1 · Proof of concept | V2 · HiFiBerry wedge | V3 · Floor unit |
 |---|---|---|---|
 | Status | **Running** (software tested on the Pi 4) | Design ready (fit-check print) | Concept |
-| Size | 65 × 120 × 40 mm | 100 × 135 mm, 40 → 65 mm high | ≈ 240 × 170 mm, 45 → 70 mm |
+| Size | 72 × 120 × 40 mm | 100 × 135 mm, 40 → 65 mm high | ≈ 240 × 170 mm, 45 → 70 mm |
 | Audio | Any class-compliant USB interface (tested: Audient Sono, Momix) | HiFiBerry DAC2 ADC Pro + own I/O board: Hi-Z buffers, relay true bypass, MIDI | 6 in / 8 out board: guitar, AUX (combo XLR/TRS), FX loop, amp outs, **balanced XLR + TRS outs**, headphones |
 | Screen | 2.0" ST7789 | 2.8" ILI9341 (320 × 240) | 5" 800 × 480 |
 | Controls | 4 knobs + 1 footswitch | 4 knobs + 1 footswitch | 4 knobs + 4 footswitches, 2 expression inputs |

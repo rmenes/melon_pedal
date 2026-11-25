@@ -6,7 +6,7 @@ Three versions are planned, from the simplest to the most complete. Only V1 and 
 
 | | V1 · Proof of concept | V2 · HiFiBerry wedge | V3 · Floor unit |
 |---|---|---|---|
-| Size | 65 × 120 × 40 mm | 100 × 135 mm, 40 → 65 mm high | ≈ 240 × 170 mm, 45 → 70 mm (estimate) |
+| Size | 72 × 120 × 40 mm | 100 × 135 mm, 40 → 65 mm high | ≈ 240 × 170 mm, 45 → 70 mm (estimate) |
 | Audio | External USB interface (iOne, Zoom AMS-22/24, Audient Sono…) | HiFiBerry DAC2 ADC Pro + I/O board (buffers, relays, MIDI) | 6 in / 8 out multichannel board (option B), two balanced outputs |
 | Screen | 2.0" ST7789 | **2.8" ILI9341 320×240** (v0.5) | 5" 800×480 |
 | Controls | 4 encoders (2 × 2 at the back), 1 footswitch | 4 encoders (2 × 2 at the back), 1 footswitch | 4 encoders, 4 footswitches |
