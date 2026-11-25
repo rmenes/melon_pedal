@@ -1,6 +1,6 @@
 # V3 floor unit: concept renders (2026-11-24)
 
-First look at the planned V3 (see [product versions](../../../docs/product-versions.md)): 5" 800×480 screen, four knobs, four footswitches (A–D) with LEDs, 6 in / 8 out audio board, battery. About 240 × 170 mm, 45 → 70 mm high. **Concept only:** no enclosure generator or STLs yet, and every size is an estimate.
+First look at the planned V3 (see [product versions](../../../docs/product-versions.md)): 5" touch screen (Raspberry Pi Touch Display 2), four encoders, an output section (VOLUME, BASS, MID, TREBLE pots, right of the screen), four footswitches (A–D) with LEDs, 6 in / 8 out audio board, battery. About 240 × 170 mm, 45 → 70 mm high. **Concept only:** no enclosure generator or STLs yet, and every size is an estimate.
 
 ![Hero](render-v3-hero.png)
 

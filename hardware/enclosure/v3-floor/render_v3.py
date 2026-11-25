@@ -1,4 +1,4 @@
-"""Concept render of the Melon Pedal V3 floor unit (5" screen, 4 footswitches, 6 in / 8 out, battery).
+"""Concept render of the Melon Pedal V3 floor unit (5" touch screen, 4 footswitches, output section, 6 in / 8 out, battery).
 
 Adapted from hifiberry-wedge/render_concept.py. Sizes are a first estimate (docs/product-versions.md).
 
@@ -65,13 +65,21 @@ def to_flat(p):
     return q
 
 
-KNOBS = [flat((x, -20.0)) for x in (-75.0, -25.0, 25.0, 75.0)]
+KNOBS = [flat((x, -22.0)) for x in (-75.0, -25.0, 25.0, 75.0)]       # encoders 1-4 (edit the screen)
+# output section right of the screen: pots, absolute position (x, y, cap radius, label, pointer angle)
+OUT_KNOBS = [(flat((80.0, 68.0)), 7.0, "TREBLE", 100), (flat((80.0, 45.0)), 7.0, "MID", 80),
+             (flat((80.0, 22.0)), 7.0, "BASS", 95), (flat((104.5, 40.0)), 8.5, "VOLUME", 20)]
+ALL_KNOBS = [(k, 7.6, a) for k, a in zip(KNOBS, (-40, 25, 70, 140))] + [(k, r, a) for k, r, _, a in OUT_KNOBS]
 FOOTS = [flat((x, -62.0)) for x in (-90.0, -30.0, 30.0, 90.0)]
 LEDS = [flat((x, -46.0)) for x in (-90.0, -30.0, 30.0, 90.0)]
-LCD_C = flat((0.0, 38.0))         # 5" window centre (flat frame)
-LCD_HALF = (58.0, 36.5)           # bezel recess half size
-WIN_HALF = (55.0, 33.5)           # window half size
-GLASS_HALF = (54.2, 32.6)         # active area half size (108.4 x 65.1)
+# Raspberry Pi Touch Display 2, 5": outline 143.5 x 91.5 x 16 mm (under the lid), viewing area 111.5 x 63,
+# active 110.4 x 62.1, 720 x 1280 used in landscape. Glass close to the surface so a finger reaches the edges.
+LCD_C = flat((0.0, 35.0))         # window centre (flat frame)
+PANEL_HALF = (71.75, 45.75)       # module outline (inside, for clearance only)
+LCD_HALF = (59.0, 34.5)           # 1 mm chamfered recess around the window
+WIN_HALF = (55.75, 31.5)          # window = viewing area
+GLASS_HALF = (55.2, 31.05)        # active area half size
+GLASS_Z = -1.6                    # glass surface below the top
 # back panel, two rows: (x, height above the bottom, kind, label). x as seen by the player (left = -x)
 ROW_LO, ROW_HI = 16.0, 47.0
 JACKS = [
@@ -142,7 +150,8 @@ def body_sdf(p, pf):
     box = sd_round_box(p, (0, 0, Z0 + (H + 10) / 2), (HW, HL, (H + 10) / 2), 5.0)   # taller: the slope cuts the top
     d = round_intersect(box, pf[:, 2] - ZT, 1.5)          # sloped top, softly rounded edge
     # LCD bezel recess + window
-    rec = sd_round_box(pf, (LCD_C[0], LCD_C[1], ZT), (LCD_HALF[0], LCD_HALF[1], 1.0), 1.5)
+    taper = np.clip(ZT - pf[:, 2], 0.0, 1.0) * 2.5               # 1 mm deep, sides slope 2.5 mm inwards
+    rec = sd_round_box(pf, (LCD_C[0], LCD_C[1], ZT), (LCD_HALF[0], LCD_HALF[1], 1.0), 1.5) + taper
     win = sd_round_box(pf, (LCD_C[0], LCD_C[1], ZT), (WIN_HALF[0], WIN_HALF[1], 3.0), 0.8)
     d = np.maximum(d, -np.minimum(rec, win))
     # vertical vent slots on the left wall
@@ -165,8 +174,8 @@ def scene(p, want_mat=False):
         metal = m1 if metal is None else np.minimum(metal, m1)
     for lx, ly in LEDS:
         metal = np.minimum(metal, sd_cyl(p, (lx, ly, ZT), 2, 3.4, 2.2, 0.6))
-    for kx, ky in KNOBS:
-        metal = np.minimum(metal, sd_cyl(p, (kx, ky, ZT), 2, 8.5, 1.2, 0.4))
+    for (kx, ky), r, _ in ALL_KNOBS:
+        metal = np.minimum(metal, sd_cyl(p, (kx, ky, ZT), 2, r + 0.9, 1.2, 0.4))
     p = p_world
     hole = None
     for x, jz, kind, _ in JACKS:
@@ -189,15 +198,16 @@ def scene(p, want_mat=False):
     p = pf
     # knobs (black, knurled skirt)
     knob = None
-    for kx, ky in KNOBS:
+    for (kx, ky), r, _ in ALL_KNOBS:
         u, v = p[:, 0] - kx, p[:, 1] - ky
         ang = np.arctan2(v, u)
-        knurl = 0.22 * np.cos(30 * ang) * (p[:, 2] < ZT + 11.5)
-        kd = sd_cyl(p, (kx, ky, ZT + 1.2), 2, 7.6, 14.0, 1.6) + knurl
+        hk = 14.0 * r / 7.6
+        knurl = 0.22 * np.cos(30 * ang) * (p[:, 2] < ZT + hk - 2.5)
+        kd = sd_cyl(p, (kx, ky, ZT + 1.2), 2, r, hk, 1.6) + knurl
         knob = kd if knob is None else np.minimum(knob, kd)
     ds.append(knob)
     # LCD glass (under the window, behind the 3 mm lid)
-    ds.append(sd_round_box(p, (LCD_C[0], LCD_C[1], ZT - 3.3), (WIN_HALF[0] + 1.0, WIN_HALF[1] + 1.0, 0.3), 0.4))
+    ds.append(sd_round_box(p, (LCD_C[0], LCD_C[1], ZT + GLASS_Z - 0.3), (WIN_HALF[0] + 1.0, WIN_HALF[1] + 1.0, 0.3), 0.4))
     # LED dome
     led = None
     for lx, ly in LEDS:
@@ -266,16 +276,30 @@ def make_top_texture():
     dr.text((cx, cy), "MELON", font=f_big, fill=cream, anchor="mm")
     cx, cy = xy(-90.0, 38.0 / CA)
     dr.text((cx, cy), "6 IN · 8 OUT · LV2", font=f_small, fill=CREAM + (200,), anchor="mm")
-    cx, cy = xy(90.0, 44.0 / CA)
+    cx, cy = xy(-90.0, 22.0 / CA)
     dr.text((cx, cy), "V3", font=font("Bold", int(7.0 * TEX_PX)), fill=CREAM + (150,), anchor="mm")
     f_num = font("SemiBold", int(3.4 * TEX_PX))
-    for i, (kx, ky) in enumerate(KNOBS):
+    for (kx, ky), kr, _ in ALL_KNOBS:
         cx, cy = xy(kx, ky)
-        r = 11.5 * TEX_PX
+        r = (kr + 2.2) * TEX_PX
         for a in np.linspace(np.radians(-225), np.radians(45), 11):
             x0, y0 = cx + r * np.cos(a), cy + r * np.sin(a)
             x1, y1 = cx + (r + 1.6 * TEX_PX) * np.cos(a), cy + (r + 1.6 * TEX_PX) * np.sin(a)
             dr.line((x0, y0, x1, y1), fill=CREAM + (170,), width=int(0.45 * TEX_PX))
+    f_lab = font("SemiBold", int(2.9 * TEX_PX))
+    for (kx, ky), kr, label, _ in OUT_KNOBS:
+        if label == "VOLUME":
+            tx, ty = xy(kx, ky - kr - 7.5)
+        else:
+            tx, ty = xy(kx - kr - 10.0, ky)
+        dr.text((tx, ty), label, font=f_lab if label == "VOLUME" else font("SemiBold", int(2.4 * TEX_PX)),
+                fill=cream, anchor="mm")
+    # output section title
+    tx, ty = xy(104.5, 70.0)
+    dr.text((tx, ty), "OUTPUT", font=font("Bold", int(3.0 * TEX_PX)), fill=LABEL + (240,), anchor="mm")
+    for i, (kx, ky) in enumerate(KNOBS):
+        cx, cy = xy(kx, ky)
+        r = 11.5 * TEX_PX
         tx, ty = xy(kx, ky - 16.0)
         dr.text((tx, ty), str(i + 1), font=f_num, fill=cream, anchor="mm")
     for i, (fx, fy) in enumerate(FOOTS):
@@ -310,32 +334,54 @@ def make_side_texture():
 
 
 def make_screen_texture():
-    w, h = 800, 480
+    """1280 x 720 touch UI: big tiles to tap, the four encoder parameters, the output section."""
+    w, h = 1280, 720
     img = Image.new("RGB", (w, h), (8, 12, 18))
     dr = ImageDraw.Draw(img)
     accent = (0x7F, 0xD6, 0x8A)
-    dr.rectangle((0, 0, w, 58), fill=(22, 34, 44))
-    dr.text((20, 29), "1-03", font=font("Bold", 30), fill=accent, anchor="lm")
-    dr.text((110, 29), "Crunch Lead", font=font("Bold", 34), fill=(235, 240, 245), anchor="lm")
-    dr.text((w - 20, 29), "DSP 41%  ·  BAT 86%", font=font("Medium", 24), fill=(150, 170, 185), anchor="rm")
+    dr.rectangle((0, 0, w, 84), fill=(22, 34, 44))
+    dr.text((30, 42), "1-03", font=font("Bold", 46), fill=accent, anchor="lm")
+    dr.text((165, 42), "Crunch Lead", font=font("Bold", 50), fill=(235, 240, 245), anchor="lm")
+    for i, t in enumerate(("◀", "▶")):                       # preset prev / next touch buttons
+        x0 = 620 + i * 96
+        dr.rounded_rectangle((x0, 14, x0 + 80, 70), radius=12, fill=(34, 50, 62))
+        dr.text((x0 + 40, 42), t, font=font("Bold", 34), fill=(200, 215, 225), anchor="mm")
+    dr.text((w - 30, 42), "DSP 41%  ·  BAT 86%", font=font("Medium", 34), fill=(150, 170, 185), anchor="rm")
     blocks = [("GATE", (95, 149, 201)), ("DRIVE", (210, 146, 63)), ("AMP", (232, 120, 60)), ("CAB", (170, 178, 183)),
               ("MOD", (63, 176, 140)), ("DELAY", (154, 130, 214)), ("VERB", (208, 122, 90))]
-    bw = (w - 40 - 6 * 10) / 7
+    bw = (w - 60 - 6 * 14) / 7
     for i, (name, c) in enumerate(blocks):
-        x0 = 20 + i * (bw + 10)
+        x0 = 30 + i * (bw + 14)
         sel = i == 4
-        dr.rounded_rectangle((x0, 78, x0 + bw, 150), radius=10, fill=c if sel else (28, 40, 50),
-                             outline=c, width=3)
-        dr.text((x0 + bw / 2, 114), name, font=font("Bold", 24), fill=(10, 14, 18) if sel else c, anchor="mm")
-    dr.text((20, 190), "Melon MultiMod  ·  Vibe", font=font("SemiBold", 32), fill=(220, 228, 235), anchor="lm")
+        dr.rounded_rectangle((x0, 108, x0 + bw, 222), radius=16, fill=c if sel else (28, 40, 50), outline=c, width=4)
+        dr.text((x0 + bw / 2, 165), name, font=font("Bold", 36), fill=(10, 14, 18) if sel else c, anchor="mm")
+    dr.text((30, 270), "Melon MultiMod  ·  Vibe", font=font("SemiBold", 44), fill=(220, 228, 235), anchor="lm")
+    dr.text((w - 30, 270), "tap a block · swipe for presets", font=font("Medium", 28), fill=(110, 130, 145), anchor="rm")
     params = [("Speed", 0.42, "2.1 Hz"), ("Depth", 0.70, "70%"), ("Mix", 0.50, "50%"), ("Bias", 0.35, "35%")]
     for i, (name, val, txt) in enumerate(params):
-        x0 = 20 + i * 192
-        cx, cy, r = x0 + 86, 330, 62
-        dr.arc((cx - r, cy - r, cx + r, cy + r), 135, 405, fill=(35, 48, 58), width=14)
-        dr.arc((cx - r, cy - r, cx + r, cy + r), 135, 135 + 270 * val, fill=accent, width=14)
-        dr.text((cx, cy), txt, font=font("Bold", 28), fill=(235, 240, 245), anchor="mm")
-        dr.text((cx, cy + 92), f"{i + 1}  {name}", font=font("SemiBold", 26), fill=(170, 185, 195), anchor="mm")
+        cx, cy, r = 130 + i * 230, 470, 88
+        dr.arc((cx - r, cy - r, cx + r, cy + r), 135, 405, fill=(35, 48, 58), width=20)
+        dr.arc((cx - r, cy - r, cx + r, cy + r), 135, 135 + 270 * val, fill=accent, width=20)
+        dr.text((cx, cy), txt, font=font("Bold", 40), fill=(235, 240, 245), anchor="mm")
+        dr.text((cx, cy + 132), f"{i + 1}  {name}", font=font("SemiBold", 36), fill=(170, 185, 195), anchor="mm")
+    # output section (follows the four pots, read-only on screen)
+    x0 = 980
+    dr.rounded_rectangle((x0, 320, w - 30, 690), radius=16, fill=(18, 26, 34))
+    dr.text((x0 + 20, 352), "OUTPUT", font=font("Bold", 30), fill=accent, anchor="lm")
+    for j, (name, val, txt) in enumerate((("VOL", 0.72, "-6 dB"), ("BASS", 0.55, "+1.5"), ("MID", 0.40, "-2.5"),
+                                          ("TREB", 0.60, "+2.0"))):
+        y = 410 + j * 72
+        dr.text((x0 + 20, y), name, font=font("SemiBold", 28), fill=(170, 185, 195), anchor="lm")
+        bx0, bx1 = x0 + 118, x0 + 198
+        dr.rounded_rectangle((bx0, y - 7, bx1, y + 7), radius=7, fill=(35, 48, 58))
+        if j == 0:
+            dr.rounded_rectangle((bx0, y - 7, bx0 + (bx1 - bx0) * val, y + 7), radius=7, fill=accent)
+        else:                                                   # EQ: bipolar bar from the centre
+            mid = (bx0 + bx1) / 2
+            end = bx0 + (bx1 - bx0) * val
+            dr.rectangle((min(mid, end), y - 7, max(mid, end), y + 7), fill=accent)
+            dr.line((mid, y - 11, mid, y + 11), fill=(150, 170, 185), width=2)
+        dr.text((w - 45, y), txt, font=font("Bold", 26), fill=(235, 240, 245), anchor="rm")
     return np.asarray(img).astype(F) / 255
 
 
@@ -529,15 +575,15 @@ def shade(ro, rd, t, hit):
     topk = nrm[k, 2] > 0.85
     capc = np.zeros(pk.shape[0], bool)
     ptr = np.zeros(pk.shape[0], bool)
-    for i, (kx, ky) in enumerate(KNOBS):
+    for (kx, ky), kr, adeg in ALL_KNOBS:
         dx, dy = pk[:, 0] - kx, pk[:, 1] - ky
         rr = np.sqrt(dx * dx + dy * dy)
-        near = rr < 8
-        capc |= near & topk & (rr < 5.2)
-        ang = np.radians([-40, 25, 70, 140][i])
+        near = rr < kr + 0.4
+        capc |= near & topk & (rr < kr * 0.68)
+        ang = np.radians(adeg)
         along = dx * np.cos(ang) + dy * np.sin(ang)
         perp = -dx * np.sin(ang) + dy * np.cos(ang)
-        ptr |= near & topk & (np.abs(perp) < 0.45) & (along > 1.5) & (along < 6.8)
+        ptr |= near & topk & (np.abs(perp) < 0.45) & (along > 1.5) & (along < kr - 0.8)
     ki = np.where(k)[0]
     base[ki[capc]] = (0.30, 0.31, 0.33)
     refl[ki[capc]] = 0.35
