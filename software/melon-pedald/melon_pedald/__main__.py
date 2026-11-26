@@ -58,6 +58,10 @@ CC_LINE = re.compile(r"Control change\s+(\d+),\s*controller\s+(\d+),\s*value\s+(
 WATCH_SECONDS = 1.5            # after adding a block: watch the live DSP load this long
 
 
+# The "plugin" of an empty chain (a blank preset: dry signal, no blocks yet). No controls, no ports.
+EMPTY = catalog.Plugin(uri="", name="Empty", bundle="", audio_in=[], audio_out=[], controls=[])
+
+
 class ChainError(RuntimeError):
     """A chain change that was refused (full chain, not enough DSP, ...). The pedal keeps playing."""
 
@@ -104,7 +108,7 @@ class Pedal:
 
     @property
     def plugin(self):
-        return self.block.plugin
+        return self.block.plugin if self.block else EMPTY
 
     @property
     def idx(self):
@@ -336,8 +340,22 @@ class Pedal:
     def load_preset(self, slot):
         p = self.presets.get(slot)
         if not p:
-            return False
+            return self.blank_preset(slot)
         return self._apply_sound(p, slot, f"preset {label(slot)} {p['name']}")
+
+    def blank_preset(self, slot):
+        """An empty slot: clear the chain (dry signal) so a new sound can be built and saved there."""
+        for b in self.chain:
+            self.engine.remove(b.inst)
+        self.chain = []
+        self.route()
+        self.slot = slot
+        self.cur = self.page = 0
+        self.readout_seen = False
+        self.release_knobs()
+        print(f"\n>>> preset {label(slot)} (empty): blank chain, dry signal")
+        self.show_page()
+        return True
 
     def snapshot(self):
         """The live sound (chain, values, selected block, bypass, preset it came from): see state.py."""
@@ -486,6 +504,8 @@ class Pedal:
         self.show_page()
 
     def save_preset(self, slot, name):
+        if not self.chain:
+            raise ChainError("the chain is empty: add a block before saving")
         self.presets.put(slot, name, self.chain, self.cur)
         self.slot = slot
 
@@ -496,9 +516,10 @@ class Pedal:
         state = "BYPASS" if self.bypassed else "on"
         pre = ""
         if self.slot is not None:
-            pre = f"{label(self.slot)} {self.presets.get(self.slot)['name']}{' *' if self.edited else ''} | "
+            sp = self.presets.get(self.slot)
+            pre = f"{label(self.slot)} {sp['name'] if sp else '(empty)'}{' *' if self.edited else ''} | "
         blk = f"block {self.cur + 1}/{len(self.chain)}{'' if self.block.on else ' (off)'} " if len(self.chain) > 1 else ""
-        print(f"--- {pre}{blk}{self.plugin.name} | page {self.page + 1}/{self.pages} | {state}")
+        print(f"--- {pre}{blk}{self.plugin.name if self.chain else 'empty chain (dry)'} | page {self.page + 1}/{self.pages} | {state}")
         if len(self.chain) > 1:
             print("    chain: " + " > ".join(("[" if i == self.cur else "") + b.short_name + ("" if b.on else " off")
                                           + ("]" if i == self.cur else "") for i, b in enumerate(self.chain)))
@@ -738,9 +759,6 @@ class Pedal:
                 self.show_menu()
             elif k == 3:
                 if self.tab == "presets":
-                    if not self.presets.get(self.sel):
-                        print("  (empty slot)")
-                        return
                     self.mode = "play"
                     self.load_preset(self.sel)
                 else:
@@ -752,8 +770,11 @@ class Pedal:
                 self.back()
             elif k == 3:
                 name = "".join(self.save_name).strip() or self.plugin.name
-                self.save_preset(self.save_slot, name)
-                print(f"  saved {label(self.save_slot)} {name}")
+                try:
+                    self.save_preset(self.save_slot, name)
+                    print(f"  saved {label(self.save_slot)} {name}")
+                except ChainError as e:
+                    self.notice(str(e))
                 self.back()
 
     # --- file browser (Melon NAM models, Melon Cab IRs) ---

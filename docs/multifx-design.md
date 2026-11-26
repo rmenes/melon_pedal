@@ -25,7 +25,7 @@ From one LV2 plugin at a time (v1) to a **chain of blocks** per preset. Builds o
 | Position | Category | Melon Plugins |
 |---|---|---|
 | 1 | Gate | Gates of Doom, Simple Gate |
-| 2 | Pitch / Synth | Shifter, Guitar Synth (right after the gate: they track best on a clean signal) |
+| 2 | Pitch / Synth | Shifter, Guitar Synth, Monolithic Synthesis (right after the gate: they track best on a clean signal) |
 | 3 | Dynamics | Comp |
 | 4 | Drive | Dirt, Muffs |
 | 5 | Amp | NAM |

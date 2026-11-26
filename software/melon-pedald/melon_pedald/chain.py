@@ -22,7 +22,7 @@ CATEGORY_LABEL = {"gate": "GATE", "pitch": "PITCH", "dynamics": "COMP", "drive":
 # plugin URI slug (after "melon", letters and digits only) -> category. One line per plugin.
 CATEGORIES = {
     "gatesofdoom": "gate", "simplegate": "gate",
-    "shifter": "pitch", "guitarsynth": "pitch",
+    "shifter": "pitch", "guitarsynth": "pitch", "monolithicsynthesis": "pitch",
     "comp": "dynamics",
     "dirt": "drive", "muffs": "drive",
     "nam": "amp",
@@ -94,6 +94,9 @@ BASELINE = 1.1          # % JACK load with no plugin (measured 2026-11-22)
 CHAIN_FACTOR = 1.1      # a chain costs ~1.1 x the sum of its blocks
 LIMIT = 85.0            # % peak: refuse a block above this
 DEFAULT_COST = 10.0     # % for a plugin that was never benched (cautious)
+# Desktop estimates (docs/dsp-budget.md) for plugins not benched on the Pi yet, when they cost more than DEFAULT_COST.
+# A real bench in plugin_costs.json always wins.
+ESTIMATED_COST = {"monolithicsynthesis": 15.0}   # Melon Monolithic Synthesis: ~12-15 % by mode (§10)
 NAM_COST = {"full": 41.2, "light": 9.1, "none": 0.9}   # Melon NAM by Model Size (bench 2026-11-22)
 
 COST_PATHS = ["/data/plugin_costs.json", os.path.expanduser("~/plugin_costs.json")]
@@ -137,7 +140,7 @@ class CostTable:
                 return NAM_COST["none"]
             light = size is not None and block.values.get(size.key, size.default) >= 0.5
             return NAM_COST["light" if light else "full"]
-        return self.costs.get(pl.uri, DEFAULT_COST)
+        return self.costs.get(pl.uri, ESTIMATED_COST.get(_slug(pl.uri), DEFAULT_COST))
 
     def predicted(self, blocks):
         """Expected JACK load (%) of a chain. Blocks that are off still count: switching them on

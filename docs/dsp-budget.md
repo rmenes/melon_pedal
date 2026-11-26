@@ -180,3 +180,26 @@ Melon Trem (melon_plugins 1.2.4) is a TR-2 style tremolo (Rate, Wave, Depth, Syn
 ```bash
 python3 -u dsp_bench.py --variants variants_trem.json --out ~/plugin_costs.json | tee bench_trem.txt
 ```
+
+## 10. Melon Monolithic Synthesis (estimated 2026-11-25, to be measured)
+
+Melon Monolithic Synthesis (melon_plugins `9f32dbb`) is an SY-200-style monophonic guitar synth: a pitch tracker (MPM at ~12 kHz, every 2.5 ms) driving a two-oscillator voice with a ladder filter, envelopes, LFO and a stereo chorus. Same method as §8/§9 (`software/tools/dsp_estimate/mns_bench.cpp`, 256-sample blocks); the reference plugins re-fitted on the desktop that day gave the same line as §9: **Pi % ≈ 0.04 + 5.65 × x86 %** (within 0.8 %, Muffs left out).
+
+| Mode (sound 1, Params 50 %) | Estimated cost on the Pi |
+|---|---:|
+| NOISE | 12.2 % |
+| BASS, SWEEP, LEAD, DUAL, SEQ, STRING, SFX | 13.4–13.8 % |
+| PAD, ARPEGGIO | 14.0 % |
+| ORGAN, BELL | 14.5–14.7 % |
+
+- **The heaviest block after NAM Full**: about like Reverberare (15.7 %). Most of it is the always-running pitch tracker, so the mode barely matters.
+- Category **Pitch / Synth** (`chain.py`): "Add block" puts it right after the gate, with Shifter and Guitar Synth.
+- Until benched, `chain.py` counts it at **15 %** (`ESTIMATED_COST`) instead of the 10 % unknown-plugin default, so the DSP guard doesn't under-count it. A bench in `plugin_costs.json` replaces that.
+- **SEQ / ARPEGGIO** follow the host tempo; mod-host gives none until the pedal tempo exists, so they run at the plugin's fallback of 120 BPM.
+- **MIDI In** needs a MIDI connection to the block in JACK; the engine doesn't make one yet, so on the pedal it tracks the guitar only.
+
+**To measure it on the Pi** (stop the pedal programs first, as in §1):
+
+```bash
+python3 -u dsp_bench.py --variants variants_mns.json --out ~/plugin_costs.json | tee bench_mns.txt
+```

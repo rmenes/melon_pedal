@@ -104,6 +104,16 @@ class ChainTest(unittest.TestCase):
             self.assertEqual(chainmod.category(plugin(slug, name)), "mod", name)
         self.assertLess(chainmod.rank("mod"), chainmod.rank("delay"))
 
+    def test_pitch_category_and_synth_estimate(self):
+        for slug, name in (("shifter", "Melon Shifter"), ("guitarsynth", "Melon Guitar Synth"),
+                           ("monolithicsynthesis", "Melon Monolithic Synthesis")):
+            self.assertEqual(chainmod.category(plugin(slug, name)), "pitch", name)
+        self.assertLess(chainmod.rank("pitch"), chainmod.rank("drive"))
+        mns = plugin("monolithicsynthesis", "Melon Monolithic Synthesis")
+        self.assertEqual(chainmod.CostTable(path="/nonexistent").cost(chainmod.Block(mns, 0)), 15.0)   # estimate
+        c = costs({"monolithicsynthesis": 12.3})
+        self.assertEqual(c.cost(chainmod.Block(mns, 0)), 12.3)                                         # bench wins
+
     def test_series_routing_and_move(self):
         p = self.pedal
         p.add_block(IDX["Chorus"])
@@ -179,6 +189,29 @@ class ChainTest(unittest.TestCase):
         p.load_preset(0)                                          # other chain: rebuilt
         self.assertEqual(self.names(), ["Dirt", "Chorus"])
         self.assertEqual(p.cur, 1)
+
+    def test_blank_preset_on_empty_slot(self):
+        p = self.pedal
+        p.add_block(IDX["Chorus"])
+        self.assertIsNone(self.store.get(5))
+        self.assertTrue(p.load_preset(5))                        # empty slot: blank chain, dry
+        self.assertEqual(p.chain, [])
+        self.assertEqual(p.slot, 5)
+        self.assertEqual(self.engine.links, {("system:capture_1", "system:playback_1"),
+                                             ("system:capture_1", "system:playback_2")})
+        self.assertEqual(p.plugin.name, "Empty")
+        self.assertEqual(p.page_controls(), [None] * 4)
+        self.assertFalse(p.edited)
+        with self.assertRaises(ChainError):                      # nothing to save yet
+            p.save_preset(5, "Nothing")
+        self.assertIsNone(self.store.get(5))
+        p.add_block(IDX["Shifter"])                              # build the new sound
+        p.add_block(IDX["Delay 2290"])
+        self.assertEqual(self.names(), ["Shifter", "Delay 2290"])
+        p.save_preset(5, "New")
+        self.assertEqual(self.store.get(5)["name"], "New")
+        p.load_preset(5)
+        self.assertEqual(self.names(), ["Shifter", "Delay 2290"])
 
     def test_version1_preset(self):
         self.store.slots[3] = {"name": "Old", "plugin": BASE + "chorus", "plugin_name": "Melon Chorus",

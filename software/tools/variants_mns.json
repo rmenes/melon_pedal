@@ -1,0 +1,6 @@
+[
+  { "uri": "melon-monolithicsynthesis", "label": "LEAD (default)", "params": { "mode": 0, "sound": 0 } },
+  { "uri": "melon-monolithicsynthesis", "label": "PAD", "params": { "mode": 1, "sound": 0 } },
+  { "uri": "melon-monolithicsynthesis", "label": "BELL (heaviest estimate)", "params": { "mode": 3, "sound": 0 } },
+  { "uri": "melon-monolithicsynthesis", "label": "ARPEGGIO", "params": { "mode": 11, "sound": 0 } }
+]

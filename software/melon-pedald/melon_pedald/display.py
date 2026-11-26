@@ -43,6 +43,10 @@ class Display:
             bank = f"BANK {pedal.slot // 6 + 1}"
             band = {"number": f"{pedal.slot % 6 + 1:02d}", "name": preset["name"], "edited": pedal.edited}
             sub = f"{blk}{plugin.name}{off}"
+        elif pedal.slot is not None:                 # blank preset on an empty slot
+            bank = f"BANK {pedal.slot // 6 + 1}"
+            band = {"number": f"{pedal.slot % 6 + 1:02d}", "name": "— new —", "edited": bool(chain)}
+            sub = f"{blk}{plugin.name}{off} · hold C to save" if chain else "empty · C/D or app: add a block"
         else:
             bank = f"PLUGIN {pedal.idx + 1}/{len(pedal.plugins)}"
             band = {"number": "--", "name": plugin.name, "edited": False}

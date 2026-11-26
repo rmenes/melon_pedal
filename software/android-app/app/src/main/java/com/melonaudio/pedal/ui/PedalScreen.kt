@@ -185,29 +185,34 @@ private fun TopBar(name: String, onWifi: () -> Unit, onAudio: (() -> Unit)?, onD
 @Composable
 private fun PresetBand(s: PedalState) {
     val preset = s.slot?.let { s.presets.getOrNull(it) }
+    val blank = preset == null && s.slot != null           // blank preset on an empty slot
     Row(
         Modifier.fillMaxWidth().background(Melon.surface, RoundedCornerShape(8.dp)).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(52.dp).background(if (preset != null) Melon.lime else Melon.line, RoundedCornerShape(6.dp)),
+            Modifier.size(52.dp).background(if (preset != null || blank) Melon.lime else Melon.line, RoundedCornerShape(6.dp)),
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                if (preset != null) s.slotLabel(s.slot!!) else "--",
+                if (preset != null || blank) s.slotLabel(s.slot!!) else "--",
                 color = Melon.ground, fontWeight = FontWeight.Bold, fontSize = 15.sp,
             )
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                preset?.name ?: s.plugin!!.name, color = Melon.cream, fontSize = 22.sp,
+                preset?.name ?: if (blank) "New preset" else s.plugin?.name.orEmpty(), color = Melon.cream, fontSize = 22.sp,
                 fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             val block = if (s.chain.size > 1) "${s.cur + 1}/${s.chain.size} · " else ""
             val off = if (s.selectedBlock?.on == false) " · off" else ""
             Text(
-                if (preset != null) block + s.plugin!!.name + off else "${block}not saved$off",
+                when {
+                    preset != null -> block + s.plugin?.name.orEmpty() + off
+                    blank && s.chain.isEmpty() -> "empty · add a block in Chain"
+                    else -> "${block}not saved$off"
+                },
                 color = Melon.sage, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
@@ -264,7 +269,9 @@ private fun SoundTab(s: PedalState, vm: PedalViewModel, onBrowse: (Int) -> Unit)
             }
         }
         if (controls.isEmpty()) {
-            item { Text("This plugin has no parameters.", color = Melon.sage, modifier = Modifier.padding(16.dp)) }
+            val msg = if (s.chainSupported && s.chain.isEmpty()) "Empty chain (dry signal): add a block in Chain."
+                      else "This plugin has no parameters."
+            item { Text(msg, color = Melon.sage, modifier = Modifier.padding(16.dp)) }
         }
         for (page in 0 until s.pages) {
             val from = page * 4
@@ -317,14 +324,14 @@ private fun PresetsTab(s: PedalState, vm: PedalViewModel, onSave: () -> Unit) {
                         .fillMaxWidth()
                         .padding(vertical = 3.dp)
                         .background(if (loaded) Melon.rind else Melon.surface, RoundedCornerShape(6.dp))
-                        .clickable(enabled = p != null) { vm.loadPreset(slot) }
+                        .clickable { vm.loadPreset(slot) }      // empty slot: the pedal starts a blank preset
                         .padding(horizontal = 12.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("%02d".format(slot % s.bankSize + 1), color = Melon.sage, fontSize = 14.sp, modifier = Modifier.width(32.dp))
                     Column(Modifier.weight(1f)) {
                         Text(p?.name ?: "— empty —", color = if (p != null) Melon.cream else Melon.dim, fontSize = 17.sp)
-                        if (p != null) Text(p.pluginName.removePrefix("Melon "), color = Melon.sage, fontSize = 12.sp)
+                        Text(p?.pluginName?.removePrefix("Melon ") ?: "tap to start a new preset", color = Melon.sage, fontSize = 12.sp)
                     }
                     if (loaded) Text("▶", color = Melon.lime, fontSize = 16.sp)
                 }
@@ -470,7 +477,7 @@ private fun SaveDialog(s: PedalState, onDismiss: () -> Unit, onSave: (Int, Strin
     val current = s.slot?.let { s.presets.getOrNull(it) }
     val firstEmpty = s.presets.indexOfFirst { it == null }
     var slot by remember { mutableIntStateOf(s.slot ?: if (firstEmpty >= 0) firstEmpty else 0) }
-    var name by remember { mutableStateOf(current?.name ?: s.plugin?.name?.removePrefix("Melon ").orEmpty()) }
+    var name by remember { mutableStateOf(current?.name ?: s.plugin?.name?.removePrefix("Melon ")?.takeIf { s.chain.isNotEmpty() }.orEmpty()) }
     val target = s.presets.getOrNull(slot)
 
     AlertDialog(

@@ -278,7 +278,7 @@ class RemoteHub:
     def _sync(self):
         """Called whenever the LCD gets a full page: tell apps what changed."""
         p = self.pedal
-        if p is None or not p.values:
+        if p is None or (not p.chain and p.slot is None):    # nothing loaded yet (a blank preset has a slot)
             return
         key = (id(p.block), p.plugin)
         if key != self._plugin:
@@ -367,7 +367,7 @@ class RemoteHub:
                     slot = int(msg["slot"])
                     p.mode = "play"
                     if not p.load_preset(slot):
-                        client.send({"ev": "error", "msg": "empty slot or plugin missing"})
+                        client.send({"ev": "error", "msg": "a plugin of this preset is not installed"})
                 elif op == "save_preset":
                     self._save(msg)
                 elif op == "lib_list":
